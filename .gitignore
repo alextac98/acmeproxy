@@ -1,0 +1,12 @@
+/target/
+/.local/
+/data/
+/dev-data/*
+!/dev-data/.gitkeep
+/node_modules/
+/test-results/
+/playwright-report/
+/.env
+*.sqlite*
+*.key
+*.token

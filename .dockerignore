@@ -1,0 +1,11 @@
+target
+.local
+data
+dev-data
+.git
+node_modules
+test-results
+playwright-report
+*.key
+*.token
+*.sqlite*

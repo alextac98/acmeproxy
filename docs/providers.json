@@ -1,0 +1,2966 @@
+[
+  {
+    "id": "dns_1984hosting",
+    "name": "1984.hosting",
+    "fields": [
+      {
+        "key": "One984HOSTING_Username",
+        "label": "Username"
+      },
+      {
+        "key": "One984HOSTING_Password",
+        "label": "Password"
+      },
+      {
+        "key": "One984HOSTING_TOTP_Secret",
+        "label": "Base32 TOTP shared secret. Required only if the account has 2FA enabled. Requires oathtool. Used to mint the OTP code automatically at login so cron renewals keep working."
+      }
+    ],
+    "docs": "https://github.com/acmesh-official/acme.sh/wiki/dnsapi2#dns_1984hosting"
+  },
+  {
+    "id": "dns_acmedns",
+    "name": "acme-dns Server API",
+    "fields": [
+      {
+        "key": "The",
+        "label": "acme-dns is a limited DNS server with RESTful API to handle ACME DNS challenges."
+      },
+      {
+        "key": "ACMEDNS_USERNAME",
+        "label": "Username. Optional."
+      },
+      {
+        "key": "ACMEDNS_PASSWORD",
+        "label": "Password. Optional."
+      },
+      {
+        "key": "ACMEDNS_SUBDOMAIN",
+        "label": "Subdomain. Optional."
+      },
+      {
+        "key": "ACMEDNS_BASE_URL",
+        "label": "API endpoint. Default: \"https://auth.acme-dns.io\"."
+      }
+    ],
+    "docs": "https://github.com/acmesh-official/acme.sh/wiki/dnsapi#dns_acmedns"
+  },
+  {
+    "id": "dns_active24",
+    "name": "Active24.cz",
+    "fields": [
+      {
+        "key": "Active24_ApiKey",
+        "label": "API Key. Called \"Identifier\" in the Active24 Admin"
+      },
+      {
+        "key": "Active24_ApiSecret",
+        "label": "API Secret. Called \"Secret key\" in the Active24 Admin"
+      }
+    ],
+    "docs": "https://github.com/acmesh-official/acme.sh/wiki/dnsapi#dns_active24"
+  },
+  {
+    "id": "dns_ad",
+    "name": "AlwaysData.com",
+    "fields": [
+      {
+        "key": "AD_API_KEY",
+        "label": "API Key"
+      }
+    ],
+    "docs": "https://github.com/acmesh-official/acme.sh/wiki/dnsapi#dns_ad"
+  },
+  {
+    "id": "dns_ali",
+    "name": "AlibabaCloud.com",
+    "fields": [
+      {
+        "key": "Ali_Key",
+        "label": "API Key"
+      },
+      {
+        "key": "Ali_Secret",
+        "label": "API Secret"
+      }
+    ],
+    "docs": "https://github.com/acmesh-official/acme.sh/wiki/dnsapi#dns_ali"
+  },
+  {
+    "id": "dns_alviy",
+    "name": "Alviy.com",
+    "fields": [
+      {
+        "key": "Alviy_token",
+        "label": "API token. Get it from the https://cloud.alviy.com/token"
+      }
+    ],
+    "docs": "https://github.com/acmesh-official/acme.sh/wiki/dnsapi2#dns_alviy"
+  },
+  {
+    "id": "dns_anx",
+    "name": "Anexia.com CloudDNS",
+    "fields": [
+      {
+        "key": "ANX_Token",
+        "label": "API Token"
+      }
+    ],
+    "docs": "https://github.com/acmesh-official/acme.sh/wiki/dnsapi2#dns_anx"
+  },
+  {
+    "id": "dns_artfiles",
+    "name": "ArtFiles.de",
+    "fields": [
+      {
+        "key": "AF_API_USERNAME",
+        "label": "API Username"
+      },
+      {
+        "key": "AF_API_PASSWORD",
+        "label": "API Password"
+      }
+    ],
+    "docs": "https://github.com/acmesh-official/acme.sh/wiki/dnsapi2#dns_artfiles"
+  },
+  {
+    "id": "dns_arubabusiness",
+    "name": "ArubaBusiness",
+    "fields": [
+      {
+        "key": "AB_Key",
+        "label": "Your ArubaBusiness API Key"
+      },
+      {
+        "key": "AB_User",
+        "label": "Your account user"
+      },
+      {
+        "key": "AB_Pass",
+        "label": "Your account password"
+      }
+    ],
+    "docs": "https://github.com/acmesh-official/acme.sh/wiki/dnsapi#dns_arubabusiness"
+  },
+  {
+    "id": "dns_arvan",
+    "name": "ArvanCloud.ir",
+    "fields": [
+      {
+        "key": "Arvan_Token",
+        "label": "API Token"
+      }
+    ],
+    "docs": "https://github.com/acmesh-official/acme.sh/wiki/dnsapi2#dns_arvan"
+  },
+  {
+    "id": "dns_aurora",
+    "name": "versio.nl AuroraDNS",
+    "fields": [
+      {
+        "key": "AURORA_Key",
+        "label": "API Key"
+      },
+      {
+        "key": "AURORA_Secret",
+        "label": "API Secret"
+      }
+    ],
+    "docs": "https://github.com/acmesh-official/acme.sh/wiki/dnsapi2#dns_aurora"
+  },
+  {
+    "id": "dns_autodns",
+    "name": "InternetX autoDNS",
+    "fields": [
+      {
+        "key": "InternetX",
+        "label": "autoDNS XML API"
+      },
+      {
+        "key": "AUTODNS_USER",
+        "label": "Username"
+      },
+      {
+        "key": "AUTODNS_PASSWORD",
+        "label": "Password"
+      },
+      {
+        "key": "AUTODNS_CONTEXT",
+        "label": "Context"
+      }
+    ],
+    "docs": "https://github.com/acmesh-official/acme.sh/wiki/dnsapi#dns_autodns"
+  },
+  {
+    "id": "dns_aws",
+    "name": "Amazon AWS Route53 domain API",
+    "fields": [
+      {
+        "key": "AWS_ACCESS_KEY_ID",
+        "label": "API Key ID"
+      },
+      {
+        "key": "AWS_SECRET_ACCESS_KEY",
+        "label": "API Secret"
+      }
+    ],
+    "docs": "https://github.com/acmesh-official/acme.sh/wiki/dnsapi#dns_aws"
+  },
+  {
+    "id": "dns_azion",
+    "name": "Azion.om",
+    "fields": [
+      {
+        "key": "AZION_Email",
+        "label": "Email"
+      },
+      {
+        "key": "AZION_Password",
+        "label": "Password"
+      }
+    ],
+    "docs": "https://github.com/acmesh-official/acme.sh/wiki/dnsapi2#dns_azion"
+  },
+  {
+    "id": "dns_azure",
+    "name": "Azure",
+    "fields": [
+      {
+        "key": "AZUREDNS_SUBSCRIPTIONID",
+        "label": "Subscription ID"
+      },
+      {
+        "key": "AZUREDNS_TENANTID",
+        "label": "Tenant ID"
+      },
+      {
+        "key": "AZUREDNS_APPID",
+        "label": "App ID. App ID of the service principal"
+      },
+      {
+        "key": "AZUREDNS_CLIENTSECRET",
+        "label": "Client Secret. Secret from creating the service principal"
+      },
+      {
+        "key": "AZUREDNS_MANAGEDIDENTITY",
+        "label": "Use Managed Identity. Use Managed Identity assigned to a resource instead of a service principal. \"true\"/\"false\""
+      },
+      {
+        "key": "AZUREDNS_BEARERTOKEN",
+        "label": "Bearer Token. Used instead of service principal credentials or managed identity. Optional."
+      }
+    ],
+    "docs": "https://github.com/acmesh-official/acme.sh/wiki/dnsapi#dns_azure"
+  },
+  {
+    "id": "dns_baidu",
+    "name": "Baidu Cloud BCD DNS",
+    "fields": [
+      {
+        "key": "Baidu_AK",
+        "label": "AccessKeyId"
+      },
+      {
+        "key": "Baidu_SK",
+        "label": "SecretAccessKey"
+      },
+      {
+        "key": "Baidu_BCD_Host",
+        "label": "API host, default: bcd.baidubce.com"
+      },
+      {
+        "key": "Baidu_DNS_Host",
+        "label": "New DNS API host, default: dns.baidubce.com"
+      },
+      {
+        "key": "Baidu_API_Preference",
+        "label": "Engine preference, default: auto"
+      },
+      {
+        "key": "Baidu_BCD_Version",
+        "label": "API version number, default: 1"
+      },
+      {
+        "key": "Baidu_BCD_Expire",
+        "label": "Signature expiration seconds, default: 3600"
+      },
+      {
+        "key": "Baidu_View",
+        "label": "Resolve view, default: DEFAULT"
+      },
+      {
+        "key": "Baidu_Line",
+        "label": "New DNS line, default: default"
+      },
+      {
+        "key": "Baidu_TTL",
+        "label": "Resolve ttl seconds, default: 300"
+      },
+      {
+        "key": "Baidu_RM_Max",
+        "label": "Max records to delete in one run, default: 20"
+      }
+    ],
+    "docs": "https://cloud.baidu.com/doc/BCD/"
+  },
+  {
+    "id": "dns_beget",
+    "name": "Beget.com",
+    "fields": [
+      {
+        "key": "BEGET_User",
+        "label": "API user"
+      },
+      {
+        "key": "BEGET_Password",
+        "label": "API password"
+      }
+    ],
+    "docs": "https://github.com/acmesh-official/acme.sh/wiki/dnsapi2#dns_beget"
+  },
+  {
+    "id": "dns_bh",
+    "name": "Best-Hosting.cz",
+    "fields": [
+      {
+        "key": "BH_API_USER",
+        "label": "API User identifier."
+      },
+      {
+        "key": "BH_API_KEY",
+        "label": "API Secret key."
+      }
+    ],
+    "docs": "https://github.com/acmesh-official/acme.sh/wiki/dnsapi2#dns_bh"
+  },
+  {
+    "id": "dns_bookmyname",
+    "name": "BookMyName.com",
+    "fields": [
+      {
+        "key": "BOOKMYNAME_USERNAME",
+        "label": "Username"
+      },
+      {
+        "key": "BOOKMYNAME_PASSWORD",
+        "label": "Password"
+      }
+    ],
+    "docs": "https://github.com/acmesh-official/acme.sh/wiki/dnsapi2#dns_bookmyname"
+  },
+  {
+    "id": "dns_bunny",
+    "name": "Bunny.net",
+    "fields": [
+      {
+        "key": "BUNNY_API_KEY",
+        "label": "API Key"
+      }
+    ],
+    "docs": "https://github.com/acmesh-official/acme.sh/wiki/dnsapi2#dns_bunny"
+  },
+  {
+    "id": "dns_calrissia",
+    "name": "Calrissia.be DNS API",
+    "fields": [
+      {
+        "key": "CALRISSIA_TOKEN",
+        "label": "Personal access token"
+      }
+    ],
+    "docs": "https://github.com/acmesh-official/acme.sh/wiki/dnsapi2#dns_calrissia"
+  },
+  {
+    "id": "dns_cdmon",
+    "name": "cdmon",
+    "fields": [
+      {
+        "key": "CDMON_Key",
+        "label": "API Key"
+      }
+    ],
+    "docs": "https://github.com/acmesh-official/acme.sh/wiki/dnsapi#dns_cdmon"
+  },
+  {
+    "id": "dns_cf",
+    "name": "CloudFlare",
+    "fields": [
+      {
+        "key": "CF_Key",
+        "label": "API Key"
+      },
+      {
+        "key": "CF_Email",
+        "label": "Your account email"
+      },
+      {
+        "key": "CF_Token",
+        "label": "API Token"
+      },
+      {
+        "key": "CF_Account_ID",
+        "label": "Account ID"
+      },
+      {
+        "key": "CF_Zone_ID",
+        "label": "Zone ID. Optional."
+      }
+    ],
+    "docs": "https://github.com/acmesh-official/acme.sh/wiki/dnsapi#dns_cf"
+  },
+  {
+    "id": "dns_clouddns",
+    "name": "vshosting.cz CloudDNS",
+    "fields": [
+      {
+        "key": "CLOUDDNS_EMAIL",
+        "label": "Email"
+      },
+      {
+        "key": "CLOUDDNS_PASSWORD",
+        "label": "Password"
+      },
+      {
+        "key": "CLOUDDNS_CLIENT_ID",
+        "label": "Client ID"
+      }
+    ],
+    "docs": "https://github.com/acmesh-official/acme.sh/wiki/dnsapi2#dns_clouddns"
+  },
+  {
+    "id": "dns_cloudns",
+    "name": "ClouDNS.net",
+    "fields": [
+      {
+        "key": "CLOUDNS_AUTH_ID",
+        "label": "Regular auth ID"
+      },
+      {
+        "key": "CLOUDNS_SUB_AUTH_ID",
+        "label": "Sub auth ID"
+      },
+      {
+        "key": "CLOUDNS_AUTH_PASSWORD",
+        "label": "Auth Password"
+      }
+    ],
+    "docs": "https://github.com/acmesh-official/acme.sh/wiki/dnsapi#dns_cloudns"
+  },
+  {
+    "id": "dns_cn",
+    "name": "Core-Networks.de",
+    "fields": [
+      {
+        "key": "CN_User",
+        "label": "User"
+      },
+      {
+        "key": "CN_Password",
+        "label": "Password"
+      }
+    ],
+    "docs": "https://github.com/acmesh-official/acme.sh/wiki/dnsapi#dns_cn"
+  },
+  {
+    "id": "dns_comlaude",
+    "name": "comlaude.com",
+    "fields": [
+      {
+        "key": "COMLAUDE_USERNAME",
+        "label": "User account"
+      },
+      {
+        "key": "COMLAUDE_PASSWORD",
+        "label": "User password"
+      },
+      {
+        "key": "COMLAUDE_API_KEY",
+        "label": "generated API key"
+      },
+      {
+        "key": "COMLAUDE_GROUP_ID",
+        "label": "Group ID in comlaude user profile"
+      },
+      {
+        "key": "Get",
+        "label": "it from the https://www.comlaude.com"
+      }
+    ],
+    "docs": "https://github.com/acmesh-official/acme.sh/wiki/dnsapi2#dns_comlaude"
+  },
+  {
+    "id": "dns_conoha",
+    "name": "ConoHa.jp",
+    "fields": [
+      {
+        "key": "CONOHA_Username",
+        "label": "Username"
+      },
+      {
+        "key": "CONOHA_Password",
+        "label": "Password"
+      },
+      {
+        "key": "CONOHA_TenantId",
+        "label": "TenantId"
+      },
+      {
+        "key": "CONOHA_IdentityServiceApi",
+        "label": "Identity Service API. E.g. \"https://identity.xxxx.conoha.io/v2.0\""
+      }
+    ],
+    "docs": "https://github.com/acmesh-official/acme.sh/wiki/dnsapi#dns_conoha"
+  },
+  {
+    "id": "dns_constellix",
+    "name": "Constellix.com",
+    "fields": [
+      {
+        "key": "CONSTELLIX_Key",
+        "label": "API Key"
+      },
+      {
+        "key": "CONSTELLIX_Secret",
+        "label": "API Secret"
+      }
+    ],
+    "docs": "https://github.com/acmesh-official/acme.sh/wiki/dnsapi2#dns_constellix"
+  },
+  {
+    "id": "dns_cpanel",
+    "name": "cPanel Server API",
+    "fields": [
+      {
+        "key": "Manage",
+        "label": "DNS via cPanel Dashboard."
+      },
+      {
+        "key": "cPanel_Username",
+        "label": "Username"
+      },
+      {
+        "key": "cPanel_Apitoken",
+        "label": "API Token"
+      },
+      {
+        "key": "cPanel_Hostname",
+        "label": "Server URL. E.g. \"https://hostname:port\""
+      }
+    ],
+    "docs": "https://github.com/acmesh-official/acme.sh/wiki/dnsapi2#dns_cpanel"
+  },
+  {
+    "id": "dns_cpanel_uapi",
+    "name": "cPanel UAPI",
+    "fields": [
+      {
+        "key": "Manage",
+        "label": "DNS via cPanel UAPI. Works with API tokens and Two-Factor Authentication."
+      },
+      {
+        "key": "cPanel_Username",
+        "label": "Username"
+      },
+      {
+        "key": "cPanel_Apitoken",
+        "label": "API Token"
+      },
+      {
+        "key": "cPanel_Hostname",
+        "label": "Server URL. E.g. \"https://hostname:port\""
+      },
+      {
+        "key": "cPanel_TTL",
+        "label": "optional TXT record TTL in seconds. Default: 120"
+      }
+    ],
+    "docs": "https://github.com/acmesh-official/acme.sh/wiki/dnsapi2#dns_cpanel_uapi"
+  },
+  {
+    "id": "dns_curanet",
+    "name": "Curanet.dk",
+    "fields": [
+      {
+        "key": "CURANET_AUTHCLIENTID",
+        "label": "Auth ClientID. Requires scope dns"
+      },
+      {
+        "key": "CURANET_AUTHSECRET",
+        "label": "Auth Secret"
+      }
+    ],
+    "docs": "https://github.com/acmesh-official/acme.sh/wiki/dnsapi2#dns_curanet"
+  },
+  {
+    "id": "dns_cyon",
+    "name": "cyon.ch",
+    "fields": [
+      {
+        "key": "CY_Username",
+        "label": "Username"
+      },
+      {
+        "key": "CY_Password",
+        "label": "API Token"
+      },
+      {
+        "key": "CY_OTP_Secret",
+        "label": "OTP token. Only required if using 2FA"
+      }
+    ],
+    "docs": "https://github.com/acmesh-official/acme.sh/wiki/dnsapi#dns_cyon"
+  },
+  {
+    "id": "dns_da",
+    "name": "DirectAdmin Server API",
+    "fields": [
+      {
+        "key": "DA_Api",
+        "label": "API Server URL. E.g. \"https://remoteUser:remotePassword@da.domain.tld:8443\". Special characters in the user/password must be percent-encoded, e.g. \"@\" -> \"%40\"."
+      },
+      {
+        "key": "DA_Api_Insecure",
+        "label": "Insecure TLS. 0: check for cert validity, 1: always accept"
+      }
+    ],
+    "docs": "https://github.com/acmesh-official/acme.sh/wiki/dnsapi#dns_da"
+  },
+  {
+    "id": "dns_ddnss",
+    "name": "DDNSS.de",
+    "fields": [
+      {
+        "key": "DDNSS_Token",
+        "label": "API Token"
+      }
+    ],
+    "docs": "https://github.com/acmesh-official/acme.sh/wiki/dnsapi#dns_ddnss"
+  },
+  {
+    "id": "dns_desec",
+    "name": "deSEC.io",
+    "fields": [
+      {
+        "key": "DEDYN_TOKEN",
+        "label": "API Token"
+      }
+    ],
+    "docs": "https://github.com/acmesh-official/acme.sh/wiki/dnsapi#dns_desec"
+  },
+  {
+    "id": "dns_df",
+    "name": "DynDnsFree.de",
+    "fields": [
+      {
+        "key": "DF_user",
+        "label": "Username"
+      },
+      {
+        "key": "DF_password",
+        "label": "Password"
+      }
+    ],
+    "docs": "https://github.com/acmesh-official/acme.sh/wiki/dnsapi2#dns_df"
+  },
+  {
+    "id": "dns_dgon",
+    "name": "DigitalOcean.com",
+    "fields": [
+      {
+        "key": "DO_API_KEY",
+        "label": "API Key"
+      }
+    ],
+    "docs": "https://github.com/acmesh-official/acme.sh/wiki/dnsapi#dns_dgon"
+  },
+  {
+    "id": "dns_dnsexit",
+    "name": "DNSExit.com",
+    "fields": [
+      {
+        "key": "DNSEXIT_API_KEY",
+        "label": "API Key"
+      }
+    ],
+    "docs": "https://github.com/acmesh-official/acme.sh/wiki/dnsapi2#dns_dnsexit"
+  },
+  {
+    "id": "dns_dnshome",
+    "name": "dnsHome.de",
+    "fields": [
+      {
+        "key": "DNSHOME_Subdomain",
+        "label": "Subdomain"
+      },
+      {
+        "key": "DNSHOME_SubdomainPassword",
+        "label": "Subdomain Password"
+      }
+    ],
+    "docs": "https://github.com/acmesh-official/acme.sh/wiki/dnsapi2#dns_dnshome"
+  },
+  {
+    "id": "dns_dnsimple",
+    "name": "DNSimple.com",
+    "fields": [
+      {
+        "key": "DNSimple_OAUTH_TOKEN",
+        "label": "OAuth Token"
+      },
+      {
+        "key": "DNSimple_ACCOUNT_ID",
+        "label": "Account ID. Optional, only needed when the token can access multiple accounts."
+      }
+    ],
+    "docs": "https://github.com/acmesh-official/acme.sh/wiki/dnsapi#dns_dnsimple"
+  },
+  {
+    "id": "dns_dnsservices",
+    "name": "DNS.Services",
+    "fields": [
+      {
+        "key": "DnsServices_Username",
+        "label": "Username"
+      },
+      {
+        "key": "DnsServices_Password",
+        "label": "Password"
+      }
+    ],
+    "docs": "https://github.com/acmesh-official/acme.sh/wiki/dnsapi2#dns_dnsservices"
+  },
+  {
+    "id": "dns_doapi",
+    "name": "Domain-Offensive do.de",
+    "fields": [
+      {
+        "key": "Official",
+        "label": "LetsEncrypt API for do.de / Domain-Offensive."
+      },
+      {
+        "key": "This",
+        "label": "API is also available to private customers/individuals."
+      },
+      {
+        "key": "DO_LETOKEN",
+        "label": "LetsEncrypt Token"
+      }
+    ],
+    "docs": "https://github.com/acmesh-official/acme.sh/wiki/dnsapi#dns_doapi"
+  },
+  {
+    "id": "dns_domeneshop",
+    "name": "DomeneShop.no",
+    "fields": [
+      {
+        "key": "DOMENESHOP_Token",
+        "label": "Token"
+      },
+      {
+        "key": "DOMENESHOP_Secret",
+        "label": "Secret"
+      }
+    ],
+    "docs": "https://github.com/acmesh-official/acme.sh/wiki/dnsapi2#dns_domeneshop"
+  },
+  {
+    "id": "dns_dp",
+    "name": "DNSPod.cn",
+    "fields": [
+      {
+        "key": "DP_Id",
+        "label": "Id"
+      },
+      {
+        "key": "DP_Key",
+        "label": "Key"
+      }
+    ],
+    "docs": "https://github.com/acmesh-official/acme.sh/wiki/dnsapi#dns_dp"
+  },
+  {
+    "id": "dns_dpi",
+    "name": "DNSPod.com",
+    "fields": [
+      {
+        "key": "DPI_Id",
+        "label": "Id"
+      },
+      {
+        "key": "DPI_Key",
+        "label": "Key"
+      }
+    ],
+    "docs": "https://github.com/acmesh-official/acme.sh/wiki/dnsapi#dns_dpi"
+  },
+  {
+    "id": "dns_dreamhost",
+    "name": "DreamHost.com",
+    "fields": [
+      {
+        "key": "DH_API_KEY",
+        "label": "API Key"
+      }
+    ],
+    "docs": "https://github.com/acmesh-official/acme.sh/wiki/dnsapi#dns_dreamhost"
+  },
+  {
+    "id": "dns_duckdns",
+    "name": "DuckDNS.org",
+    "fields": [
+      {
+        "key": "DuckDNS_Token",
+        "label": "API Token"
+      }
+    ],
+    "docs": "https://github.com/acmesh-official/acme.sh/wiki/dnsapi#dns_duckdns"
+  },
+  {
+    "id": "dns_durabledns",
+    "name": "DurableDNS.com",
+    "fields": [
+      {
+        "key": "DD_API_User",
+        "label": "API User"
+      },
+      {
+        "key": "DD_API_Key",
+        "label": "API Key"
+      }
+    ],
+    "docs": "https://github.com/acmesh-official/acme.sh/wiki/dnsapi2#dns_durabledns"
+  },
+  {
+    "id": "dns_dyn",
+    "name": "Dyn.com",
+    "fields": [
+      {
+        "key": "DYN_Customer",
+        "label": "Customer"
+      },
+      {
+        "key": "DYN_Username",
+        "label": "API Username"
+      },
+      {
+        "key": "DYN_Password",
+        "label": "Secret"
+      }
+    ],
+    "docs": "https://github.com/acmesh-official/acme.sh/wiki/dnsapi#dns_dyn"
+  },
+  {
+    "id": "dns_dynu",
+    "name": "Dynu.com",
+    "fields": [
+      {
+        "key": "Dynu_ClientId",
+        "label": "Client ID"
+      },
+      {
+        "key": "Dynu_Secret",
+        "label": "Secret"
+      }
+    ],
+    "docs": "https://github.com/acmesh-official/acme.sh/wiki/dnsapi#dns_dynu"
+  },
+  {
+    "id": "dns_dynv6",
+    "name": "DynV6.com",
+    "fields": [
+      {
+        "key": "DYNV6_TOKEN",
+        "label": "REST API token. Get from https://DynV6.com/keys"
+      },
+      {
+        "key": "KEY",
+        "label": "Path to SSH private key file. E.g. \"/root/.ssh/dynv6\""
+      }
+    ],
+    "docs": "https://github.com/acmesh-official/acme.sh/wiki/dnsapi2#dns_dynv6"
+  },
+  {
+    "id": "dns_easydns",
+    "name": "easyDNS.net",
+    "fields": [
+      {
+        "key": "EASYDNS_Token",
+        "label": "API Token"
+      },
+      {
+        "key": "EASYDNS_Key",
+        "label": "API Key"
+      }
+    ],
+    "docs": "https://github.com/acmesh-official/acme.sh/wiki/dnsapi2#dns_easydns"
+  },
+  {
+    "id": "dns_edgecenter",
+    "name": "EdgeCenter.ru",
+    "fields": [
+      {
+        "key": "EDGECENTER_API_KEY",
+        "label": "API Key"
+      }
+    ],
+    "docs": "https://github.com/acmesh-official/acme.sh/wiki/dnsapi2#dns_edgecenter"
+  },
+  {
+    "id": "dns_edgedns",
+    "name": "Akamai.com Edge DNS",
+    "fields": [
+      {
+        "key": "AKAMAI_HOST",
+        "label": "Host"
+      },
+      {
+        "key": "AKAMAI_ACCESS_TOKEN",
+        "label": "Access token"
+      },
+      {
+        "key": "AKAMAI_CLIENT_TOKEN",
+        "label": "Client token"
+      },
+      {
+        "key": "AKAMAI_CLIENT_SECRET",
+        "label": "Client secret"
+      }
+    ],
+    "docs": "https://github.com/acmesh-official/acme.sh/wiki/dnsapi2#dns_edgedns"
+  },
+  {
+    "id": "dns_eurodns",
+    "name": "EuroDNS",
+    "fields": [
+      {
+        "key": "EURODNS_APP_ID",
+        "label": "Application ID"
+      },
+      {
+        "key": "EURODNS_API_KEY",
+        "label": "API Key"
+      },
+      {
+        "key": "EURODNS_TTL",
+        "label": "TTL. Default: \"600\"."
+      }
+    ],
+    "docs": "https://github.com/acmesh-official/acme.sh/wiki/dnsapi2#dns_eurodns"
+  },
+  {
+    "id": "dns_euserv",
+    "name": "EUserv.com",
+    "fields": [
+      {
+        "key": "EUSERV_Username",
+        "label": "Username"
+      },
+      {
+        "key": "EUSERV_Password",
+        "label": "Password"
+      }
+    ],
+    "docs": "https://github.com/acmesh-official/acme.sh/wiki/dnsapi#dns_euserv"
+  },
+  {
+    "id": "dns_exoscale",
+    "name": "Exoscale.com",
+    "fields": [
+      {
+        "key": "EXOSCALE_API_KEY",
+        "label": "API Key"
+      },
+      {
+        "key": "EXOSCALE_SECRET_KEY",
+        "label": "API Secret key"
+      }
+    ],
+    "docs": "https://github.com/acmesh-official/acme.sh/wiki/dnsapi#dns_exoscale"
+  },
+  {
+    "id": "dns_firestorm",
+    "name": "Firestorm.ch",
+    "fields": [
+      {
+        "key": "FST_Key",
+        "label": "Customer ID"
+      },
+      {
+        "key": "FST_Secret",
+        "label": "API Secret"
+      },
+      {
+        "key": "FST_Url",
+        "label": "API URL. Optional. Default \"https://api.firestorm.ch/acme-dns\"."
+      }
+    ],
+    "docs": "https://github.com/acmesh-official/acme.sh/wiki/dnsapi2#dns_firestorm"
+  },
+  {
+    "id": "dns_fornex",
+    "name": "Fornex.com",
+    "fields": [
+      {
+        "key": "FORNEX_API_KEY",
+        "label": "API Key"
+      }
+    ],
+    "docs": "https://github.com/acmesh-official/acme.sh/wiki/dnsapi2#dns_fornex"
+  },
+  {
+    "id": "dns_freedns",
+    "name": "FreeDNS",
+    "fields": [
+      {
+        "key": "FREEDNS_User",
+        "label": "Username"
+      },
+      {
+        "key": "FREEDNS_Password",
+        "label": "Password"
+      }
+    ],
+    "docs": "https://github.com/acmesh-official/acme.sh/wiki/dnsapi#dns_freedns"
+  },
+  {
+    "id": "dns_freemyip",
+    "name": "FreeMyIP.com",
+    "fields": [
+      {
+        "key": "FREEMYIP_Token",
+        "label": "API Token"
+      }
+    ],
+    "docs": "https://github.com/acmesh-official/acme.sh/wiki/dnsapi2#dns_freemyip"
+  },
+  {
+    "id": "dns_gandi_livedns",
+    "name": "Gandi.net LiveDNS",
+    "fields": [
+      {
+        "key": "GANDI_LIVEDNS_KEY",
+        "label": "API Key"
+      }
+    ],
+    "docs": "https://github.com/acmesh-official/acme.sh/wiki/dnsapi#dns_gandi_livedns"
+  },
+  {
+    "id": "dns_gcloud",
+    "name": "Google Cloud DNS",
+    "fields": [
+      {
+        "key": "CLOUDSDK_ACTIVE_CONFIG_NAME",
+        "label": "Active config name. E.g. \"default\""
+      }
+    ],
+    "docs": "https://github.com/acmesh-official/acme.sh/wiki/dnsapi#dns_gcloud"
+  },
+  {
+    "id": "dns_gcore",
+    "name": "Gcore.com",
+    "fields": [
+      {
+        "key": "GCORE_Key",
+        "label": "API Key"
+      }
+    ],
+    "docs": "https://github.com/acmesh-official/acme.sh/wiki/dnsapi#dns_gcore"
+  },
+  {
+    "id": "dns_gd",
+    "name": "GoDaddy.com",
+    "fields": [
+      {
+        "key": "GD_Key",
+        "label": "API Key"
+      },
+      {
+        "key": "GD_Secret",
+        "label": "API Secret"
+      }
+    ],
+    "docs": "https://github.com/acmesh-official/acme.sh/wiki/dnsapi#dns_gd"
+  },
+  {
+    "id": "dns_geoscaling",
+    "name": "GeoScaling.com",
+    "fields": [
+      {
+        "key": "GEOSCALING_Username",
+        "label": "Username. This is usually NOT an email address"
+      },
+      {
+        "key": "GEOSCALING_Password",
+        "label": "Password"
+      }
+    ],
+    "docs": "https://github.com/acmesh-official/acme.sh/wiki/dnsapi#dns_geoscaling"
+  },
+  {
+    "id": "dns_glesys",
+    "name": "Glesys",
+    "fields": [
+      {
+        "key": "GLESYS_API_KEY",
+        "label": "Generated API key."
+      },
+      {
+        "key": "GLESYS_PROJECT_ID",
+        "label": "Project ID for the API key (e.g. cl12345)."
+      },
+      {
+        "key": "GLESYS_API",
+        "label": "API endpoint. Default \"https://api.glesys.com/domain\"."
+      },
+      {
+        "key": "GLESYS_TTL",
+        "label": "TXT record TTL. Default 120."
+      }
+    ],
+    "docs": "https://github.com/acmesh-official/acme.sh/wiki/dnsapi2#dns_glesys"
+  },
+  {
+    "id": "dns_gname",
+    "name": "GNAME",
+    "fields": [
+      {
+        "key": "GNAME_APPID",
+        "label": "Your APPID"
+      },
+      {
+        "key": "GNAME_APPKEY",
+        "label": "Your APPKEY"
+      },
+      {
+        "key": "GNAME_TTL",
+        "label": "DNS resolution record TTL value, default 120."
+      }
+    ],
+    "docs": "https://github.com/acmesh-official/acme.sh/wiki/dnsapi#dns_gname"
+  },
+  {
+    "id": "dns_googledomains",
+    "name": "Google Domains",
+    "fields": [
+      {
+        "key": "GOOGLEDOMAINS_ACCESS_TOKEN",
+        "label": "API Access Token"
+      },
+      {
+        "key": "GOOGLEDOMAINS_ZONE",
+        "label": "Zone"
+      }
+    ],
+    "docs": "https://github.com/acmesh-official/acme.sh/wiki/dnsapi2#dns_googledomains"
+  },
+  {
+    "id": "dns_he",
+    "name": "Hurricane Electric HE.net",
+    "fields": [
+      {
+        "key": "HE_Username",
+        "label": "Username"
+      },
+      {
+        "key": "HE_Password",
+        "label": "Password"
+      }
+    ],
+    "docs": "https://github.com/acmesh-official/acme.sh/wiki/dnsapi#dns_he"
+  },
+  {
+    "id": "dns_he_ddns",
+    "name": "Hurricane Electric HE.net DDNS",
+    "fields": [
+      {
+        "key": "HE_DDNS_KEY",
+        "label": "The DDNS key"
+      }
+    ],
+    "docs": "https://github.com/acmesh-official/acme.sh/wiki/dnsapi2#dns_he_ddns"
+  },
+  {
+    "id": "dns_hetznercloud",
+    "name": "Hetzner Cloud DNS",
+    "fields": [
+      {
+        "key": "HETZNER_TOKEN",
+        "label": "API token for the Hetzner Cloud DNS API"
+      },
+      {
+        "key": "HETZNER_TTL",
+        "label": "Custom TTL for new TXT rrsets (default 120)"
+      },
+      {
+        "key": "HETZNER_API",
+        "label": "Override API endpoint (default https://api.hetzner.cloud/v1)"
+      },
+      {
+        "key": "HETZNER_MAX_ATTEMPTS",
+        "label": "Number of 1s polls to wait for async actions (default 120)"
+      }
+    ],
+    "docs": "https://github.com/acmesh-official/acme.sh/wiki/dnsapi2#dns_hetznercloud"
+  },
+  {
+    "id": "dns_hexonet",
+    "name": "Hexonet.com",
+    "fields": [
+      {
+        "key": "Hexonet_Login",
+        "label": "Login. E.g. \"username!roleId\""
+      },
+      {
+        "key": "Hexonet_Password",
+        "label": "Role Password"
+      }
+    ],
+    "docs": "https://github.com/acmesh-official/acme.sh/wiki/dnsapi2#dns_hexonet"
+  },
+  {
+    "id": "dns_hostingde",
+    "name": "Hosting.de",
+    "fields": [
+      {
+        "key": "HOSTINGDE_ENDPOINT",
+        "label": "Endpoint. E.g. \"https://secure.hosting.de\""
+      },
+      {
+        "key": "HOSTINGDE_APIKEY",
+        "label": "API Key"
+      }
+    ],
+    "docs": "https://github.com/acmesh-official/acme.sh/wiki/dnsapi#dns_hostingde"
+  },
+  {
+    "id": "dns_hostinger",
+    "name": "Hostinger",
+    "fields": [
+      {
+        "key": "HOSTINGER_Token",
+        "label": "API Key"
+      }
+    ],
+    "docs": "https://github.com/acmesh-official/acme.sh/wiki/dnsapi2#dns_hostinger"
+  },
+  {
+    "id": "dns_hostup",
+    "name": "HostUp DNS",
+    "fields": [
+      {
+        "key": "HOSTUP_API_KEY",
+        "label": "    Required. HostUp API key with read:dns + write:dns + read:domains scopes."
+      },
+      {
+        "key": "HOSTUP_API_BASE",
+        "label": "   Optional. Override API base URL (default: https://cloud.hostup.se/api/v2)."
+      },
+      {
+        "key": "HOSTUP_TTL",
+        "label": "        Optional. TTL for TXT records (default: 60 seconds)."
+      },
+      {
+        "key": "HOSTUP_ZONE_ID",
+        "label": "    Optional. Force a specific v2 zone ID (zone_...) and skip auto-detection."
+      }
+    ],
+    "docs": "https://developer.hostup.se/"
+  },
+  {
+    "id": "dns_huaweicloud",
+    "name": "HuaweiCloud.com",
+    "fields": [
+      {
+        "key": "HUAWEICLOUD_Username",
+        "label": "Username"
+      },
+      {
+        "key": "HUAWEICLOUD_Password",
+        "label": "Password"
+      },
+      {
+        "key": "HUAWEICLOUD_DomainName",
+        "label": "DomainName"
+      },
+      {
+        "key": "HUAWEICLOUD_Region",
+        "label": "Region. E.g. \"cn-north-4\". Optional, defaults to \"ap-southeast-1\"."
+      }
+    ],
+    "docs": "https://github.com/acmesh-official/acme.sh/wiki/dnsapi2#dns_huaweicloud"
+  },
+  {
+    "id": "dns_infoblox",
+    "name": "Infoblox.com",
+    "fields": [
+      {
+        "key": "Infoblox_Creds",
+        "label": "Credentials. E.g. \"username:password\""
+      },
+      {
+        "key": "Infoblox_Server",
+        "label": "Server hostname. IP or FQDN of infoblox appliance"
+      }
+    ],
+    "docs": "https://github.com/acmesh-official/acme.sh/wiki/dnsapi#dns_infoblox"
+  },
+  {
+    "id": "dns_infoblox_uddi",
+    "name": "Infoblox UDDI",
+    "fields": [
+      {
+        "key": "Infoblox_UDDI_Key",
+        "label": "API Key for Infoblox UDDI"
+      },
+      {
+        "key": "Infoblox_Portal",
+        "label": "URL, e.g. \"csp.infoblox.com\" or \"csp.eu.infoblox.com\""
+      }
+    ],
+    "docs": "https://github.com/acmesh-official/acme.sh/wiki/dnsapi2#dns_infoblox_uddi"
+  },
+  {
+    "id": "dns_infomaniak",
+    "name": "Infomaniak.com",
+    "fields": [
+      {
+        "key": "INFOMANIAK_API_TOKEN",
+        "label": "API Token"
+      }
+    ],
+    "docs": "https://github.com/acmesh-official/acme.sh/wiki/dnsapi2#dns_infomaniak"
+  },
+  {
+    "id": "dns_internetbs",
+    "name": "InternetBS.net",
+    "fields": [
+      {
+        "key": "INTERNETBS_API_KEY",
+        "label": "API Key"
+      },
+      {
+        "key": "INTERNETBS_API_PASSWORD",
+        "label": "API Password"
+      }
+    ],
+    "docs": "https://github.com/acmesh-official/acme.sh/wiki/dnsapi2#dns_internetbs"
+  },
+  {
+    "id": "dns_inwx",
+    "name": "INWX.de",
+    "fields": [
+      {
+        "key": "INWX_User",
+        "label": "Username"
+      },
+      {
+        "key": "INWX_Password",
+        "label": "Password"
+      },
+      {
+        "key": "INWX_Shared_Secret",
+        "label": "2 Factor Authentication Shared Secret (optional requires oathtool)"
+      }
+    ],
+    "docs": "https://github.com/acmesh-official/acme.sh/wiki/dnsapi#dns_inwx"
+  },
+  {
+    "id": "dns_ionos",
+    "name": "IONOS.de",
+    "fields": [
+      {
+        "key": "IONOS_PREFIX",
+        "label": "Prefix"
+      },
+      {
+        "key": "IONOS_SECRET",
+        "label": "Secret"
+      }
+    ],
+    "docs": "https://github.com/acmesh-official/acme.sh/wiki/dnsapi2#dns_ionos"
+  },
+  {
+    "id": "dns_ionos_cloud",
+    "name": "IONOS Cloud DNS",
+    "fields": [
+      {
+        "key": "IONOS_TOKEN",
+        "label": "API Token."
+      }
+    ],
+    "docs": "https://github.com/acmesh-official/acme.sh/wiki/dnsapi2#dns_ionos_cloud"
+  },
+  {
+    "id": "dns_ipprojects",
+    "name": "IP-Projects DNS",
+    "fields": [
+      {
+        "key": "IPP_Apikey",
+        "label": "API Key"
+      }
+    ],
+    "docs": "https://github.com/acmesh-official/acme.sh/wiki/dnsapi2#dns_ipprojects"
+  },
+  {
+    "id": "dns_ipv64",
+    "name": "IPv64.net",
+    "fields": [
+      {
+        "key": "IPv64_Token",
+        "label": "API Token"
+      }
+    ],
+    "docs": "https://github.com/acmesh-official/acme.sh/wiki/dnsapi2#dns_ipv64"
+  },
+  {
+    "id": "dns_ispconfig",
+    "name": "ISPConfig Server API",
+    "fields": [
+      {
+        "key": "ISPC_User",
+        "label": "Remote User"
+      },
+      {
+        "key": "ISPC_Password",
+        "label": "Remote Password"
+      },
+      {
+        "key": "ISPC_Api",
+        "label": "API URL. E.g. \"https://ispc.domain.tld:8080/remote/json.php\""
+      },
+      {
+        "key": "ISPC_Api_Insecure",
+        "label": "Insecure TLS. 0: check for cert validity, 1: always accept"
+      }
+    ],
+    "docs": "https://github.com/acmesh-official/acme.sh/wiki/dnsapi#dns_ispconfig"
+  },
+  {
+    "id": "dns_jd",
+    "name": "jdcloud.com",
+    "fields": [
+      {
+        "key": "JD_ACCESS_KEY_ID",
+        "label": "Access key ID"
+      },
+      {
+        "key": "JD_ACCESS_KEY_SECRET",
+        "label": "Access key secret"
+      },
+      {
+        "key": "JD_REGION",
+        "label": "Region. E.g. \"cn-north-1\""
+      }
+    ],
+    "docs": "https://github.com/acmesh-official/acme.sh/wiki/dnsapi2#dns_jd"
+  },
+  {
+    "id": "dns_joker",
+    "name": "Joker.com",
+    "fields": [
+      {
+        "key": "JOKER_USERNAME",
+        "label": "Username"
+      },
+      {
+        "key": "JOKER_PASSWORD",
+        "label": "Password"
+      }
+    ],
+    "docs": "https://github.com/acmesh-official/acme.sh/wiki/dnsapi2#dns_joker"
+  },
+  {
+    "id": "dns_kappernet",
+    "name": "kapper.net",
+    "fields": [
+      {
+        "key": "KAPPERNETDNS_Key",
+        "label": "API Key"
+      },
+      {
+        "key": "KAPPERNETDNS_Secret",
+        "label": "API Secret"
+      }
+    ],
+    "docs": "https://github.com/acmesh-official/acme.sh/wiki/dnsapi2#dns_kappernet"
+  },
+  {
+    "id": "dns_kas",
+    "name": "All-inkl Kas Server",
+    "fields": [
+      {
+        "key": "KAS_Login",
+        "label": "API login name"
+      },
+      {
+        "key": "KAS_Authtype",
+        "label": "API auth type. Default: \"plain\""
+      },
+      {
+        "key": "KAS_Authdata",
+        "label": "API auth data"
+      }
+    ],
+    "docs": "https://github.com/acmesh-official/acme.sh/wiki/dnsapi2#dns_kas"
+  },
+  {
+    "id": "dns_kinghost",
+    "name": "King.host",
+    "fields": [
+      {
+        "key": "KINGHOST_Username",
+        "label": "Username"
+      },
+      {
+        "key": "KINGHOST_Password",
+        "label": "Password"
+      }
+    ],
+    "docs": "https://github.com/acmesh-official/acme.sh/wiki/dnsapi#dns_kinghost"
+  },
+  {
+    "id": "dns_knot",
+    "name": "Knot Server knsupdate",
+    "fields": [
+      {
+        "key": "KNOT_SERVER",
+        "label": "Server hostname. Default: \"localhost\"."
+      },
+      {
+        "key": "KNOT_KEY",
+        "label": "TSIG key data, not a file path. knsupdate \"key\" statement format: \"[alg:]name secret\". E.g. \"hmac-sha256:acme_key BASE64SECRET=\""
+      },
+      {
+        "key": "KNOT_ZONE",
+        "label": "Zone name. Optional, set it when the challenge record lives in a delegated subdomain zone. Default: the parent domain of the challenge record."
+      }
+    ],
+    "docs": "https://github.com/acmesh-official/acme.sh/wiki/dnsapi#dns_knot"
+  },
+  {
+    "id": "dns_la",
+    "name": "dns.la",
+    "fields": [
+      {
+        "key": "LA_Id",
+        "label": "APIID"
+      },
+      {
+        "key": "LA_Sk",
+        "label": "APISecret"
+      },
+      {
+        "key": "LA_Token",
+        "label": "\u7528\u5192\u53f7\u8fde\u63a5 APIID APISecret \u518dbase64\u751f\u6210"
+      }
+    ],
+    "docs": "https://github.com/acmesh-official/acme.sh/wiki/dnsapi2#dns_la"
+  },
+  {
+    "id": "dns_laodc",
+    "name": "LaoDC DNS API Server",
+    "fields": [
+      {
+        "key": "LaoDC_Key",
+        "label": "API Key"
+      }
+    ],
+    "docs": "https://github.com/acmesh-official/acme.sh/wiki/dnsapi2#dns_laodc"
+  },
+  {
+    "id": "dns_leaseweb",
+    "name": "Leaseweb.com",
+    "fields": [
+      {
+        "key": "LSW_Key",
+        "label": "API Key"
+      }
+    ],
+    "docs": "https://github.com/acmesh-official/acme.sh/wiki/dnsapi2#dns_leaseweb"
+  },
+  {
+    "id": "dns_level27",
+    "name": "Level27",
+    "fields": [
+      {
+        "key": "LEVEL27_API_KEY",
+        "label": "API key. Get one from the Level27 control panel (https://app.level27.eu/account/profile/security)."
+      },
+      {
+        "key": "LEVEL27_API",
+        "label": "API base URL. Optional. Default \"https://api.level27.eu/v1\"."
+      }
+    ],
+    "docs": "https://github.com/acmesh-official/acme.sh/wiki/dnsapi2#dns_level27"
+  },
+  {
+    "id": "dns_lexicon",
+    "name": "Lexicon DNS client",
+    "fields": [
+      {
+        "key": "PROVIDER",
+        "label": "Provider"
+      }
+    ],
+    "docs": "https://github.com/acmesh-official/acme.sh/wiki/How-to-use-lexicon-DNS-API"
+  },
+  {
+    "id": "dns_limacity",
+    "name": "lima-city.de",
+    "fields": [
+      {
+        "key": "LIMACITY_APIKEY",
+        "label": "API Key. Note: The API Key must have following roles: dns.admin, domains.reader"
+      }
+    ],
+    "docs": "https://github.com/acmesh-official/acme.sh/wiki/dnsapi2#dns_limacity"
+  },
+  {
+    "id": "dns_linode",
+    "name": "Linode.com (Old)",
+    "fields": [
+      {
+        "key": "LINODE_API_KEY",
+        "label": "API Key"
+      }
+    ],
+    "docs": "https://github.com/acmesh-official/acme.sh/wiki/dnsapi"
+  },
+  {
+    "id": "dns_linode_v4",
+    "name": "Linode.com",
+    "fields": [
+      {
+        "key": "LINODE_V4_API_KEY",
+        "label": "API Key"
+      }
+    ],
+    "docs": "https://github.com/acmesh-official/acme.sh/wiki/dnsapi#dns_linode_v4"
+  },
+  {
+    "id": "dns_loopia",
+    "name": "Loopia.se",
+    "fields": [
+      {
+        "key": "LOOPIA_Api",
+        "label": "API URL. E.g. \"https://api.loopia.<TLD>/RPCSERV\" where the <TLD> is one of: com, no, rs, se. Default: \"se\"."
+      },
+      {
+        "key": "LOOPIA_User",
+        "label": "Username"
+      },
+      {
+        "key": "LOOPIA_Password",
+        "label": "Password"
+      }
+    ],
+    "docs": "https://github.com/acmesh-official/acme.sh/wiki/dnsapi#dns_loopia"
+  },
+  {
+    "id": "dns_lua",
+    "name": "LuaDNS.com",
+    "fields": [
+      {
+        "key": "LUA_Key",
+        "label": "API key"
+      },
+      {
+        "key": "LUA_Email",
+        "label": "Email"
+      }
+    ],
+    "docs": "https://github.com/acmesh-official/acme.sh/wiki/dnsapi#dns_lua"
+  },
+  {
+    "id": "dns_maradns",
+    "name": "MaraDNS Server",
+    "fields": [
+      {
+        "key": "MARA_ZONE_FILE",
+        "label": "Zone file path. E.g. \"/etc/maradns/db.domain.com\""
+      },
+      {
+        "key": "MARA_DUENDE_PID_PATH",
+        "label": "Duende PID Path. E.g. \"/run/maradns/etc_maradns_mararc.pid\""
+      }
+    ],
+    "docs": "https://github.com/acmesh-official/acme.sh/wiki/dnsapi#dns_maradns"
+  },
+  {
+    "id": "dns_me",
+    "name": "DnsMadeEasy.com",
+    "fields": [
+      {
+        "key": "ME_Key",
+        "label": "API Key"
+      },
+      {
+        "key": "ME_Secret",
+        "label": "API Secret"
+      }
+    ],
+    "docs": "https://github.com/acmesh-official/acme.sh/wiki/dnsapi#dns_me"
+  },
+  {
+    "id": "dns_mgwm",
+    "name": "mgw-media.de",
+    "fields": [
+      {
+        "key": "MGWM_CUSTOMER",
+        "label": "Your customer number"
+      },
+      {
+        "key": "MGWM_API_HASH",
+        "label": "Your API Hash"
+      }
+    ],
+    "docs": "https://github.com/acmesh-official/acme.sh/wiki/dnsapi2#dns_mgwm"
+  },
+  {
+    "id": "dns_miab",
+    "name": "Mail-in-a-Box",
+    "fields": [
+      {
+        "key": "MIAB_Username",
+        "label": "Admin username"
+      },
+      {
+        "key": "MIAB_Password",
+        "label": "Admin password"
+      },
+      {
+        "key": "MIAB_Server",
+        "label": "Server hostname. FQDN of your_MIAB Server"
+      }
+    ],
+    "docs": "https://github.com/acmesh-official/acme.sh/wiki/dnsapi2#dns_miab"
+  },
+  {
+    "id": "dns_mijnhost",
+    "name": "mijn.host",
+    "fields": [
+      {
+        "key": "MIJNHOST_API_KEY",
+        "label": "API Key"
+      }
+    ],
+    "docs": "https://github.com/acmesh-official/acme.sh/wiki/dnsapi2#dns_mijnhost"
+  },
+  {
+    "id": "dns_misaka",
+    "name": "Misaka.io",
+    "fields": [
+      {
+        "key": "Misaka_Key",
+        "label": "API Key"
+      }
+    ],
+    "docs": "https://github.com/acmesh-official/acme.sh/wiki/dnsapi2#dns_misaka"
+  },
+  {
+    "id": "dns_muumuu",
+    "name": "muumuu-domain.com",
+    "fields": [
+      {
+        "key": "MUUMUU_PAT",
+        "label": "Personal Access Token (scopes: domains:read, dns:read, dns:write)"
+      }
+    ],
+    "docs": "https://github.com/acmesh-official/acme.sh/wiki/dnsapi2#dns_muumuu"
+  },
+  {
+    "id": "dns_myapi",
+    "name": "Custom API Example",
+    "fields": [
+      {
+        "key": "A",
+        "label": "sample custom DNS API script description."
+      },
+      {
+        "key": "MYAPI_Token",
+        "label": "API Token. Get API Token from https://example.com/api/"
+      },
+      {
+        "key": "MYAPI_Variable2",
+        "label": "Option 2. Default \"default value\"."
+      }
+    ],
+    "docs": "https://github.com/acmesh-official/acme.sh/wiki/dnsapi2#dns_myapi"
+  },
+  {
+    "id": "dns_mydevil",
+    "name": "MyDevil.net",
+    "fields": [
+      {
+        "key": "except",
+        "label": "for wildcard domains."
+      },
+      {
+        "key": "This",
+        "label": "script depends on devil command that MyDevil.net provides,"
+      },
+      {
+        "key": "which",
+        "label": "means that it works only on server side."
+      }
+    ],
+    "docs": "https://github.com/acmesh-official/acme.sh/wiki/dnsapi#dns_mydevil"
+  },
+  {
+    "id": "dns_mydnsjp",
+    "name": "MyDNS.JP",
+    "fields": [
+      {
+        "key": "MYDNSJP_MasterID",
+        "label": "Master ID"
+      },
+      {
+        "key": "MYDNSJP_Password",
+        "label": "Password"
+      }
+    ],
+    "docs": "https://github.com/acmesh-official/acme.sh/wiki/dnsapi#dns_mydnsjp"
+  },
+  {
+    "id": "dns_mythic_beasts",
+    "name": "Mythic-Beasts.com",
+    "fields": [
+      {
+        "key": "MB_AK",
+        "label": "API Key"
+      },
+      {
+        "key": "MB_AS",
+        "label": "API Secret"
+      }
+    ],
+    "docs": "https://github.com/acmesh-official/acme.sh/wiki/dnsapi2#dns_mythic_beasts"
+  },
+  {
+    "id": "dns_namecheap",
+    "name": "NameCheap.com",
+    "fields": [
+      {
+        "key": "NAMECHEAP_API_KEY",
+        "label": "API Key"
+      },
+      {
+        "key": "NAMECHEAP_USERNAME",
+        "label": "Username"
+      },
+      {
+        "key": "NAMECHEAP_SOURCEIP",
+        "label": "Source IP"
+      }
+    ],
+    "docs": "https://github.com/acmesh-official/acme.sh/wiki/dnsapi#dns_namecheap"
+  },
+  {
+    "id": "dns_namecom",
+    "name": "Name.com",
+    "fields": [
+      {
+        "key": "Namecom_Username",
+        "label": "Username"
+      },
+      {
+        "key": "Namecom_Token",
+        "label": "API Token"
+      }
+    ],
+    "docs": "https://github.com/acmesh-official/acme.sh/wiki/dnsapi#dns_namecom"
+  },
+  {
+    "id": "dns_namesilo",
+    "name": "NameSilo.com",
+    "fields": [
+      {
+        "key": "Namesilo_Key",
+        "label": "API Key"
+      }
+    ],
+    "docs": "https://github.com/acmesh-official/acme.sh/wiki/dnsapi#dns_namesilo"
+  },
+  {
+    "id": "dns_nanelo",
+    "name": "Nanelo.com",
+    "fields": [
+      {
+        "key": "NANELO_TOKEN",
+        "label": "API Token"
+      }
+    ],
+    "docs": "https://github.com/acmesh-official/acme.sh/wiki/dnsapi2#dns_nanelo"
+  },
+  {
+    "id": "dns_nederhost",
+    "name": "NederHost.nl",
+    "fields": [
+      {
+        "key": "NederHost_Key",
+        "label": "API Key"
+      }
+    ],
+    "docs": "https://github.com/acmesh-official/acme.sh/wiki/dnsapi#dns_nederhost"
+  },
+  {
+    "id": "dns_neodigit",
+    "name": "Neodigit.net",
+    "fields": [
+      {
+        "key": "NEODIGIT_API_TOKEN",
+        "label": "API Token"
+      }
+    ],
+    "docs": "https://github.com/acmesh-official/acme.sh/wiki/dnsapi#dns_neodigit"
+  },
+  {
+    "id": "dns_netcup",
+    "name": "netcup.eu",
+    "fields": [
+      {
+        "key": "NC_Apikey",
+        "label": "API Key"
+      },
+      {
+        "key": "NC_Apipw",
+        "label": "API Password"
+      },
+      {
+        "key": "NC_CID",
+        "label": "Customer Number"
+      }
+    ],
+    "docs": "https://github.com/acmesh-official/acme.sh/wiki/dnsapi#dns_netcup"
+  },
+  {
+    "id": "dns_netlify",
+    "name": "Netlify.com",
+    "fields": [
+      {
+        "key": "NETLIFY_ACCESS_TOKEN",
+        "label": "API Token"
+      }
+    ],
+    "docs": "https://github.com/acmesh-official/acme.sh/wiki/dnsapi2#dns_netlify"
+  },
+  {
+    "id": "dns_nic",
+    "name": "nic.ru",
+    "fields": [
+      {
+        "key": "NIC_ClientID",
+        "label": "Client ID"
+      },
+      {
+        "key": "NIC_ClientSecret",
+        "label": "Client Secret"
+      },
+      {
+        "key": "NIC_Username",
+        "label": "Username"
+      },
+      {
+        "key": "NIC_Password",
+        "label": "Password"
+      }
+    ],
+    "docs": "https://github.com/acmesh-official/acme.sh/wiki/dnsapi2#dns_nic"
+  },
+  {
+    "id": "dns_njalla",
+    "name": "Njalla",
+    "fields": [
+      {
+        "key": "NJALLA_Token",
+        "label": "API Token"
+      }
+    ],
+    "docs": "https://github.com/acmesh-official/acme.sh/wiki/dnsapi#dns_njalla"
+  },
+  {
+    "id": "dns_nm",
+    "name": "NameMaster.de",
+    "fields": [
+      {
+        "key": "NM_user",
+        "label": "API Username"
+      },
+      {
+        "key": "NM_sha256",
+        "label": "API Password as SHA256 hash"
+      }
+    ],
+    "docs": "https://github.com/acmesh-official/acme.sh/wiki/dnsapi2#dns_nm"
+  },
+  {
+    "id": "dns_nsd",
+    "name": "NLnetLabs NSD Server",
+    "fields": [
+      {
+        "key": "Nsd_ZoneFile",
+        "label": "Zone File path. E.g. \"/etc/nsd/zones/example.com.zone\""
+      },
+      {
+        "key": "Nsd_Command",
+        "label": "Command. E.g. \"sudo nsd-control reload\""
+      }
+    ],
+    "docs": "https://github.com/acmesh-official/acme.sh/wiki/dnsapi#nsd"
+  },
+  {
+    "id": "dns_nsone",
+    "name": "ns1.com",
+    "fields": [
+      {
+        "key": "NS1_Key",
+        "label": "API Key"
+      }
+    ],
+    "docs": "https://github.com/acmesh-official/acme.sh/wiki/dnsapi#dns_nsone"
+  },
+  {
+    "id": "dns_nsupdate",
+    "name": "nsupdate RFC 2136 DynDNS client",
+    "fields": [
+      {
+        "key": "NSUPDATE_SERVER",
+        "label": "Server hostname. Default: \"localhost\"."
+      },
+      {
+        "key": "NSUPDATE_SERVER_PORT",
+        "label": "Server port. Default: \"53\"."
+      },
+      {
+        "key": "NSUPDATE_KEY",
+        "label": "File path to TSIG key. Default: \"\". Optional."
+      },
+      {
+        "key": "NSUPDATE_ZONE",
+        "label": "Domain zone to update. Optional."
+      }
+    ],
+    "docs": "https://github.com/acmesh-official/acme.sh/wiki/dnsapi#dns_nsupdate"
+  },
+  {
+    "id": "dns_nw",
+    "name": "Nexcess.net (NocWorx)",
+    "fields": [
+      {
+        "key": "NW_API_TOKEN",
+        "label": "API Token"
+      },
+      {
+        "key": "NW_API_ENDPOINT",
+        "label": "API Endpoint. Default: \"https://portal.nexcess.net\"."
+      }
+    ],
+    "docs": "https://github.com/acmesh-official/acme.sh/wiki/dnsapi#dns_nw"
+  },
+  {
+    "id": "dns_oci",
+    "name": "Oracle Cloud Infrastructure (OCI)",
+    "fields": [
+      {
+        "key": "If",
+        "label": "OCI CLI configuration file ~/.oci/config has a DEFAULT profile then it will be used."
+      },
+      {
+        "key": "OCI_CLI_TENANCY",
+        "label": "OCID of tenancy that contains the target DNS zone. Optional."
+      },
+      {
+        "key": "OCI_CLI_USER",
+        "label": "OCID of user with permission to add/remove records from zones. Optional."
+      },
+      {
+        "key": "OCI_CLI_REGION",
+        "label": "Should point to the tenancy home region. Optional."
+      },
+      {
+        "key": "OCI_CLI_KEY_FILE",
+        "label": "Path to private API signing key file in PEM format. Optional."
+      },
+      {
+        "key": "OCI_CLI_KEY",
+        "label": "The private API signing key in PEM format. Optional."
+      }
+    ],
+    "docs": "https://github.com/acmesh-official/acme.sh/wiki/How-to-use-Oracle-Cloud-Infrastructure-DNS"
+  },
+  {
+    "id": "dns_omglol",
+    "name": "omg.lol",
+    "fields": [
+      {
+        "key": "OMG_ApiKey",
+        "label": "- API Key. This is accessible from the bottom of the account page at https://home.omg.lol/account"
+      },
+      {
+        "key": "OMG_Address",
+        "label": "- Address. This is your omg.lol address, without the preceding @ - you can see your list on your dashboard at https://home.omg.lol/dashboard"
+      }
+    ],
+    "docs": "https://github.com/acmesh-official/acme.sh/wiki/dnsapi2#dns_omglol"
+  },
+  {
+    "id": "dns_one",
+    "name": "one.com",
+    "fields": [
+      {
+        "key": "ONECOM_User",
+        "label": "Username"
+      },
+      {
+        "key": "ONECOM_Password",
+        "label": "Password"
+      }
+    ],
+    "docs": "https://github.com/acmesh-official/acme.sh/wiki/dnsapi#dns_one"
+  },
+  {
+    "id": "dns_online",
+    "name": "online.net",
+    "fields": [
+      {
+        "key": "ONLINE_API_KEY",
+        "label": "API Key"
+      }
+    ],
+    "docs": "https://github.com/acmesh-official/acme.sh/wiki/dnsapi#dns_online"
+  },
+  {
+    "id": "dns_openprovider",
+    "name": "OpenProvider.eu",
+    "fields": [
+      {
+        "key": "OPENPROVIDER_USER",
+        "label": "Username"
+      },
+      {
+        "key": "OPENPROVIDER_PASSWORDHASH",
+        "label": "Password hash"
+      }
+    ],
+    "docs": "https://github.com/acmesh-official/acme.sh/wiki/dnsapi#dns_openprovider"
+  },
+  {
+    "id": "dns_openprovider_rest",
+    "name": "OpenProvider (REST)",
+    "fields": [
+      {
+        "key": "OPENPROVIDER_REST_USERNAME",
+        "label": "Openprovider Account Username"
+      },
+      {
+        "key": "OPENPROVIDER_REST_PASSWORD",
+        "label": "Openprovider Account Password"
+      }
+    ],
+    "docs": "https://github.com/acmesh-official/acme.sh/wiki/dnsapi2#dns_openprovider_rest"
+  },
+  {
+    "id": "dns_openstack",
+    "name": "OpenStack Designate API",
+    "fields": [
+      {
+        "key": "Depends",
+        "label": "on OpenStackClient and python-desginateclient."
+      },
+      {
+        "key": "You",
+        "label": "will require Keystone V3 credentials loaded into your environment,"
+      },
+      {
+        "key": "which",
+        "label": "could be either password or v3 application credential type."
+      },
+      {
+        "key": "OS_AUTH_URL",
+        "label": "Auth URL. E.g. \"https://keystone.example.com:5000/\""
+      },
+      {
+        "key": "OS_USERNAME",
+        "label": "Username"
+      },
+      {
+        "key": "OS_PASSWORD",
+        "label": "Password"
+      },
+      {
+        "key": "OS_PROJECT_NAME",
+        "label": "Project name"
+      },
+      {
+        "key": "OS_PROJECT_DOMAIN_NAME",
+        "label": "Project domain name. E.g. \"Default\""
+      },
+      {
+        "key": "OS_USER_DOMAIN_NAME",
+        "label": "User domain name. E.g. \"Default\""
+      }
+    ],
+    "docs": "https://github.com/acmesh-official/acme.sh/wiki/dnsapi2#dns_openstack"
+  },
+  {
+    "id": "dns_opnsense",
+    "name": "OPNsense Server",
+    "fields": [
+      {
+        "key": "OPNs_Host",
+        "label": "Server Hostname. E.g. \"opnsense.example.com\""
+      },
+      {
+        "key": "OPNs_Port",
+        "label": "Port. Default: \"443\"."
+      },
+      {
+        "key": "OPNs_Key",
+        "label": "API Key"
+      },
+      {
+        "key": "OPNs_Token",
+        "label": "API Token"
+      },
+      {
+        "key": "OPNs_Api_Insecure",
+        "label": "Insecure TLS. 0: check for cert validity, 1: always accept"
+      }
+    ],
+    "docs": "https://github.com/acmesh-official/acme.sh/wiki/dnsapi#dns_opnsense"
+  },
+  {
+    "id": "dns_opusdns",
+    "name": "OpusDNS.com",
+    "fields": [
+      {
+        "key": "OPUSDNS_API_Key",
+        "label": "API Key. Can be created at https://dashboard.opusdns.com/settings/api-keys"
+      },
+      {
+        "key": "OPUSDNS_API_Endpoint",
+        "label": "API Endpoint URL. Default \"https://api.opusdns.com\". Optional."
+      },
+      {
+        "key": "OPUSDNS_TTL",
+        "label": "TTL for DNS challenge records in seconds. Default \"60\". Optional."
+      }
+    ],
+    "docs": "https://github.com/acmesh-official/acme.sh/wiki/dnsapi#dns_opusdns"
+  },
+  {
+    "id": "dns_ovh",
+    "name": "OVH.com",
+    "fields": [
+      {
+        "key": "OVH_END_POINT",
+        "label": "Endpoint. \"ovh-eu\", \"ovh-us\", \"ovh-ca\", \"kimsufi-eu\", \"kimsufi-ca\", \"soyoustart-eu\", \"soyoustart-ca\" or raw URL. Default: \"ovh-eu\"."
+      },
+      {
+        "key": "OVH_AK",
+        "label": "Application Key"
+      },
+      {
+        "key": "OVH_AS",
+        "label": "Application Secret"
+      },
+      {
+        "key": "OVH_CK",
+        "label": "Consumer Key"
+      }
+    ],
+    "docs": "https://github.com/acmesh-official/acme.sh/wiki/How-to-use-OVH-domain-api"
+  },
+  {
+    "id": "dns_pdns",
+    "name": "PowerDNS Server API",
+    "fields": [
+      {
+        "key": "PDNS_Url",
+        "label": "API URL. E.g. \"http://ns.example.com:8081\""
+      },
+      {
+        "key": "PDNS_ServerId",
+        "label": "Server ID. E.g. \"localhost\""
+      },
+      {
+        "key": "PDNS_Token",
+        "label": "API Token"
+      },
+      {
+        "key": "PDNS_Ttl",
+        "label": "Domain TTL. Default: \"60\"."
+      }
+    ],
+    "docs": "https://github.com/acmesh-official/acme.sh/wiki/dnsapi2#dns_pdns"
+  },
+  {
+    "id": "dns_pleskxml",
+    "name": "Plesk Server API",
+    "fields": [
+      {
+        "key": "pleskxml_uri",
+        "label": "Plesk server API URL. E.g. \"https://your-plesk-server.net:8443/enterprise/control/agent.php\""
+      },
+      {
+        "key": "pleskxml_user",
+        "label": "Username"
+      },
+      {
+        "key": "pleskxml_pass",
+        "label": "Password"
+      }
+    ],
+    "docs": "https://github.com/acmesh-official/acme.sh/wiki/dnsapi2#dns_pleskxml"
+  },
+  {
+    "id": "dns_pointhq",
+    "name": "pointhq.com PointDNS",
+    "fields": [
+      {
+        "key": "PointHQ_Key",
+        "label": "API Key"
+      },
+      {
+        "key": "PointHQ_Email",
+        "label": "Email"
+      }
+    ],
+    "docs": "https://github.com/acmesh-official/acme.sh/wiki/dnsapi#dns_pointhq"
+  },
+  {
+    "id": "dns_porkbun",
+    "name": "Porkbun.com",
+    "fields": [
+      {
+        "key": "PORKBUN_API_KEY",
+        "label": "API Key"
+      },
+      {
+        "key": "PORKBUN_SECRET_API_KEY",
+        "label": "API Secret"
+      }
+    ],
+    "docs": "https://github.com/acmesh-official/acme.sh/wiki/dnsapi2#dns_porkbun"
+  },
+  {
+    "id": "dns_qc",
+    "name": "QUIC.cloud",
+    "fields": [
+      {
+        "key": "QC_API_KEY",
+        "label": "QC API Key"
+      },
+      {
+        "key": "QC_API_EMAIL",
+        "label": "Your account email"
+      }
+    ],
+    "docs": "https://github.com/acmesh-official/acme.sh/wiki/dnsapi#dns_qc"
+  },
+  {
+    "id": "dns_rackcorp",
+    "name": "RackCorp.com",
+    "fields": [
+      {
+        "key": "RACKCORP_APIUUID",
+        "label": "API UUID. See Portal: ADMINISTRATION -> API"
+      },
+      {
+        "key": "RACKCORP_APISECRET",
+        "label": "API Secret"
+      }
+    ],
+    "docs": "https://github.com/acmesh-official/acme.sh/wiki/dnsapi2#dns_rackcorp"
+  },
+  {
+    "id": "dns_rackspace",
+    "name": "RackSpace.com",
+    "fields": [
+      {
+        "key": "RACKSPACE_Apikey",
+        "label": "API Key"
+      },
+      {
+        "key": "RACKSPACE_Username",
+        "label": "Username"
+      }
+    ],
+    "docs": "https://github.com/acmesh-official/acme.sh/wiki/dnsapi#dns_rackspace"
+  },
+  {
+    "id": "dns_rage4",
+    "name": "rage4.com",
+    "fields": [
+      {
+        "key": "RAGE4_TOKEN",
+        "label": "API Key"
+      },
+      {
+        "key": "RAGE4_USERNAME",
+        "label": "Username"
+      }
+    ],
+    "docs": "https://github.com/acmesh-official/acme.sh/wiki/dnsapi#dns_rage4"
+  },
+  {
+    "id": "dns_rcode0",
+    "name": "Rcode0 rcodezero.at",
+    "fields": [
+      {
+        "key": "RCODE0_URL",
+        "label": "API URL. E.g. \"https://my.rcodezero.at\""
+      },
+      {
+        "key": "RCODE0_API_TOKEN",
+        "label": "API Token"
+      },
+      {
+        "key": "RCODE0_TTL",
+        "label": "TTL. Default: \"60\"."
+      }
+    ],
+    "docs": "https://github.com/acmesh-official/acme.sh/wiki/dnsapi2#dns_rcode0"
+  },
+  {
+    "id": "dns_regru",
+    "name": "reg.ru",
+    "fields": [
+      {
+        "key": "REGRU_API_Username",
+        "label": "Username"
+      },
+      {
+        "key": "REGRU_API_Password",
+        "label": "Password"
+      }
+    ],
+    "docs": "https://github.com/acmesh-official/acme.sh/wiki/dnsapi2#dns_regru"
+  },
+  {
+    "id": "dns_scaleway",
+    "name": "ScaleWay.com",
+    "fields": [
+      {
+        "key": "SCALEWAY_API_TOKEN",
+        "label": "API Token"
+      }
+    ],
+    "docs": "https://github.com/acmesh-official/acme.sh/wiki/dnsapi2#dns_scaleway"
+  },
+  {
+    "id": "dns_schlundtech",
+    "name": "SchlundTech.de",
+    "fields": [
+      {
+        "key": "SCHLUNDTECH_USER",
+        "label": "Username"
+      },
+      {
+        "key": "SCHLUNDTECH_PASSWORD",
+        "label": "Password"
+      }
+    ],
+    "docs": "https://github.com/acmesh-official/acme.sh/wiki/dnsapi2#dns_schlundtech"
+  },
+  {
+    "id": "dns_selfhost",
+    "name": "SelfHost.de",
+    "fields": [
+      {
+        "key": "SELFHOSTDNS_USERNAME",
+        "label": "Username"
+      },
+      {
+        "key": "SELFHOSTDNS_PASSWORD",
+        "label": "Password"
+      },
+      {
+        "key": "SELFHOSTDNS_MAP",
+        "label": "Subdomain name"
+      },
+      {
+        "key": "SELFHOSTDNS_UPDATE_URL",
+        "label": "API url. Optional. Default \"https://account.selfhost.de/cgi-bin/api.pl\""
+      }
+    ],
+    "docs": "https://github.com/acmesh-official/acme.sh/wiki/dnsapi2#dns_selfhost"
+  },
+  {
+    "id": "dns_servercow",
+    "name": "ServerCow.de",
+    "fields": [
+      {
+        "key": "SERVERCOW_API_Username",
+        "label": "Username"
+      },
+      {
+        "key": "SERVERCOW_API_Password",
+        "label": "Password"
+      }
+    ],
+    "docs": "https://github.com/acmesh-official/acme.sh/wiki/dnsapi#dns_servercow"
+  },
+  {
+    "id": "dns_simply",
+    "name": "Simply.com",
+    "fields": [
+      {
+        "key": "SIMPLY_AccountName",
+        "label": "Account name"
+      },
+      {
+        "key": "SIMPLY_ApiKey",
+        "label": "API Key"
+      }
+    ],
+    "docs": "https://github.com/acmesh-official/acme.sh/wiki/dnsapi2#dns_simply"
+  },
+  {
+    "id": "dns_sitehost",
+    "name": "SiteHost",
+    "fields": [
+      {
+        "key": "SITEHOST_API_KEY",
+        "label": "API Key"
+      },
+      {
+        "key": "SITEHOST_CLIENT_ID",
+        "label": "Client ID. The numeric client ID for your SiteHost account."
+      }
+    ],
+    "docs": "https://github.com/acmesh-official/acme.sh/wiki/dnsapi2#dns_sitehost"
+  },
+  {
+    "id": "dns_sotoon",
+    "name": "Sotoon.ir",
+    "fields": [
+      {
+        "key": "Sotoon_Token",
+        "label": "API Token"
+      },
+      {
+        "key": "Sotoon_WorkspaceUUID",
+        "label": "Workspace UUID"
+      }
+    ],
+    "docs": "https://github.com/acmesh-official/acme.sh/wiki/dnsapi2#dns_sotoon"
+  },
+  {
+    "id": "dns_spaceship",
+    "name": "Spaceship.com",
+    "fields": [
+      {
+        "key": "SPACESHIP_API_KEY",
+        "label": "API Key"
+      },
+      {
+        "key": "SPACESHIP_API_SECRET",
+        "label": "API Secret"
+      },
+      {
+        "key": "SPACESHIP_ROOT_DOMAIN",
+        "label": "Root domain. Manually specify the root domain if auto-detection fails. Optional."
+      }
+    ],
+    "docs": "https://github.com/acmesh-official/acme.sh/wiki/dnsapi2#dns_spaceship"
+  },
+  {
+    "id": "dns_subreg",
+    "name": "Subreg.cz",
+    "fields": [
+      {
+        "key": "SUBREG_API_USERNAME",
+        "label": "API username"
+      },
+      {
+        "key": "SUBREG_API_PASSWORD",
+        "label": "API password"
+      }
+    ],
+    "docs": "https://github.com/acmesh-official/acme.sh/wiki/dnsapi2#dns_subreg"
+  },
+  {
+    "id": "dns_technitium",
+    "name": "Technitium DNS Server",
+    "fields": [
+      {
+        "key": "Technitium_Server",
+        "label": "Server Address"
+      },
+      {
+        "key": "Technitium_Token",
+        "label": "API Token"
+      },
+      {
+        "key": "Technitium_Expiry_Ttl",
+        "label": "Number of seconds before DNS server auto-deletes the acme record"
+      }
+    ],
+    "docs": "https://github.com/acmesh-official/acme.sh/wiki/dnsapi2#dns_technitium"
+  },
+  {
+    "id": "dns_tele3",
+    "name": "tele3.cz",
+    "fields": [
+      {
+        "key": "TELE3_Key",
+        "label": "API Key"
+      },
+      {
+        "key": "TELE3_Secret",
+        "label": "API Secret"
+      }
+    ],
+    "docs": "https://github.com/acmesh-official/acme.sh/wiki/dnsapi2#tele3"
+  },
+  {
+    "id": "dns_tencent",
+    "name": "Tencent.com",
+    "fields": [
+      {
+        "key": "Tencent_SecretId",
+        "label": "Secret ID"
+      },
+      {
+        "key": "Tencent_SecretKey",
+        "label": "Secret Key"
+      }
+    ],
+    "docs": "https://github.com/acmesh-official/acme.sh/wiki/dnsapi2#dns_tencent"
+  },
+  {
+    "id": "dns_timeweb",
+    "name": "Timeweb.Cloud",
+    "fields": [
+      {
+        "key": "TW_Token",
+        "label": "API JWT token. Get it from the control panel at https://timeweb.cloud/my/api-keys"
+      }
+    ],
+    "docs": "https://github.com/acmesh-official/acme.sh/wiki/dnsapi2#dns_timeweb"
+  },
+  {
+    "id": "dns_transip",
+    "name": "TransIP.nl",
+    "fields": [
+      {
+        "key": "TRANSIP_Username",
+        "label": "Username"
+      },
+      {
+        "key": "TRANSIP_Key_File",
+        "label": "Private key file path"
+      }
+    ],
+    "docs": "https://github.com/acmesh-official/acme.sh/wiki/dnsapi2#dns_transip"
+  },
+  {
+    "id": "dns_udr",
+    "name": "united-domains Reselling",
+    "fields": [
+      {
+        "key": "UDR_USER",
+        "label": "Username"
+      },
+      {
+        "key": "UDR_PASS",
+        "label": "Password"
+      }
+    ],
+    "docs": "https://github.com/acmesh-official/acme.sh/wiki/dnsapi#dns_udr"
+  },
+  {
+    "id": "dns_ultra",
+    "name": "UltraDNS.com",
+    "fields": [
+      {
+        "key": "ULTRA_USR",
+        "label": "Username"
+      },
+      {
+        "key": "ULTRA_PWD",
+        "label": "Password"
+      }
+    ],
+    "docs": "https://github.com/acmesh-official/acme.sh/wiki/dnsapi#dns_ultra"
+  },
+  {
+    "id": "dns_unoeuro",
+    "name": "unoeuro.com",
+    "fields": [
+      {
+        "key": "UNO_Key",
+        "label": "API Key"
+      },
+      {
+        "key": "UNO_User",
+        "label": "Username"
+      }
+    ],
+    "docs": "https://github.com/acmesh-official/acme.sh/wiki/dnsapi#dns_unoeuro"
+  },
+  {
+    "id": "dns_variomedia",
+    "name": "variomedia.de",
+    "fields": [
+      {
+        "key": "VARIOMEDIA_API_TOKEN",
+        "label": "API Token"
+      }
+    ],
+    "docs": "https://github.com/acmesh-official/acme.sh/wiki/dnsapi#dns_variomedia"
+  },
+  {
+    "id": "dns_veesp",
+    "name": "veesp.com",
+    "fields": [
+      {
+        "key": "VEESP_User",
+        "label": "Username"
+      },
+      {
+        "key": "VEESP_Password",
+        "label": "Password"
+      }
+    ],
+    "docs": "https://github.com/acmesh-official/acme.sh/wiki/dnsapi2#dns_veesp"
+  },
+  {
+    "id": "dns_vercel",
+    "name": "Vercel.com",
+    "fields": [
+      {
+        "key": "VERCEL_TOKEN",
+        "label": "API Token"
+      }
+    ],
+    "docs": "https://github.com/acmesh-official/acme.sh/wiki/dnsapi2#dns_vercel"
+  },
+  {
+    "id": "dns_virakcloud",
+    "name": "VirakCloud DNS API",
+    "fields": [
+      {
+        "key": "VIRAKCLOUD_API_TOKEN",
+        "label": "VirakCloud API Bearer Token"
+      }
+    ],
+    "docs": "https://github.com/acmesh-official/acme.sh/wiki/dnsapi#dns_virakcloud"
+  },
+  {
+    "id": "dns_volcengine",
+    "name": "Volcano Engine DNS API",
+    "fields": [
+      {
+        "key": "Volcengine_ACCESS_KEY_ID",
+        "label": "API Key ID"
+      },
+      {
+        "key": "Volcengine_SECRET_ACCESS_KEY",
+        "label": "API Secret"
+      },
+      {
+        "key": "Volcengine_SESSION_TOKEN",
+        "label": "Session Token. Optional, only needed when using temporary STS credentials."
+      }
+    ],
+    "docs": "https://github.com/acmesh-official/acme.sh/wiki/dnsapi2#dns_volcengine"
+  },
+  {
+    "id": "dns_vscale",
+    "name": "vscale.io",
+    "fields": [
+      {
+        "key": "VSCALE_API_KEY",
+        "label": "API Key"
+      }
+    ],
+    "docs": "https://github.com/acmesh-official/acme.sh/wiki/dnsapi#dns_vscale"
+  },
+  {
+    "id": "dns_vultr",
+    "name": "vultr.com",
+    "fields": [
+      {
+        "key": "VULTR_API_KEY",
+        "label": "API Key"
+      }
+    ],
+    "docs": "https://github.com/acmesh-official/acme.sh/wiki/dnsapi2#dns_vultr"
+  },
+  {
+    "id": "dns_websupport",
+    "name": "Websupport.sk",
+    "fields": [
+      {
+        "key": "WS_ApiKey",
+        "label": "API Key. Called \"Identifier\" in the WS Admin"
+      },
+      {
+        "key": "WS_ApiSecret",
+        "label": "API Secret. Called \"Secret key\" in the WS Admin"
+      }
+    ],
+    "docs": "https://github.com/acmesh-official/acme.sh/wiki/dnsapi2#dns_websupport"
+  },
+  {
+    "id": "dns_wedos",
+    "name": "WEDOS.com",
+    "fields": [
+      {
+        "key": "WEDOS_Username",
+        "label": "WAPI login (account email)"
+      },
+      {
+        "key": "WEDOS_Wapipass",
+        "label": "WAPI password"
+      }
+    ],
+    "docs": "https://github.com/acmesh-official/acme.sh/wiki/dnsapi2#dns_wedos"
+  },
+  {
+    "id": "dns_west_cn",
+    "name": "West.cn",
+    "fields": [
+      {
+        "key": "WEST_Username",
+        "label": "API username"
+      },
+      {
+        "key": "WEST_Key",
+        "label": "API Key. Set at https://www.west.cn/manager/API/APIconfig.asp"
+      }
+    ],
+    "docs": "https://github.com/acmesh-official/acme.sh/wiki/dnsapi2#dns_west_cn"
+  },
+  {
+    "id": "dns_world4you",
+    "name": "World4You.com",
+    "fields": [
+      {
+        "key": "WORLD4YOU_USERNAME",
+        "label": "Username"
+      },
+      {
+        "key": "WORLD4YOU_PASSWORD",
+        "label": "Password"
+      }
+    ],
+    "docs": "https://github.com/acmesh-official/acme.sh/wiki/dnsapi#dns_world4you"
+  },
+  {
+    "id": "dns_yandex360",
+    "name": "Yandex 360 for Business DNS API.",
+    "fields": [
+      {
+        "key": "Yandex",
+        "label": "360 for Business is a digital environment for effective collaboration."
+      },
+      {
+        "key": "YANDEX360_CLIENT_ID",
+        "label": "OAuth 2.0 ClientID"
+      },
+      {
+        "key": "YANDEX360_CLIENT_SECRET",
+        "label": "OAuth 2.0 Client secret"
+      },
+      {
+        "key": "YANDEX360_ORG_ID",
+        "label": "Organization ID. Optional."
+      },
+      {
+        "key": "YANDEX360_ACCESS_TOKEN",
+        "label": "OAuth 2.0 Access token. Optional."
+      }
+    ],
+    "docs": "https://github.com/acmesh-official/acme.sh/wiki/dnsapi2#dns_yandex360"
+  },
+  {
+    "id": "dns_yc",
+    "name": "Yandex Cloud DNS",
+    "fields": [
+      {
+        "key": "YC_Zone_ID",
+        "label": "DNS Zone ID"
+      },
+      {
+        "key": "YC_Folder_ID",
+        "label": "YC Folder ID"
+      },
+      {
+        "key": "YC_SA_ID",
+        "label": "Service Account ID"
+      },
+      {
+        "key": "YC_SA_Key_ID",
+        "label": "Service Account IAM Key ID"
+      },
+      {
+        "key": "YC_SA_Key_File_Path",
+        "label": "Private key file path. Optional."
+      },
+      {
+        "key": "YC_SA_Key_File_PEM_b64",
+        "label": "Base64 content of private key file. Use instead of Path to private key file. Optional."
+      }
+    ],
+    "docs": "https://github.com/acmesh-official/acme.sh/wiki/dnsapi2#dns_yc"
+  },
+  {
+    "id": "dns_zilore",
+    "name": "Zilore.com",
+    "fields": [
+      {
+        "key": "Zilore_Key",
+        "label": "API Key"
+      }
+    ],
+    "docs": "https://github.com/acmesh-official/acme.sh/wiki/dnsapi#dns_zilore"
+  },
+  {
+    "id": "dns_zone",
+    "name": "Zone.eu",
+    "fields": [
+      {
+        "key": "ZONE_Username",
+        "label": "Username"
+      },
+      {
+        "key": "ZONE_Key",
+        "label": "API Key"
+      }
+    ],
+    "docs": "https://github.com/acmesh-official/acme.sh/wiki/dnsapi#dns_zone"
+  },
+  {
+    "id": "dns_zoneedit",
+    "name": "ZoneEdit.com",
+    "fields": [
+      {
+        "key": "ZONEEDIT_ID",
+        "label": "ID"
+      },
+      {
+        "key": "ZONEEDIT_Token",
+        "label": "API Token"
+      }
+    ],
+    "docs": "https://github.com/acmesh-official/acme.sh/wiki/dnsapi2#dns_zoneedit"
+  },
+  {
+    "id": "dns_zonomi",
+    "name": "zonomi.com",
+    "fields": [
+      {
+        "key": "ZM_Key",
+        "label": "API Key"
+      },
+      {
+        "key": "ZM_Api",
+        "label": "API endpoint. Default: \"https://zonomi.com/app/dns/dyndns.jsp\". For RimuHosting use \"https://rimuhosting.com/dns/dyndns.jsp\"."
+      }
+    ],
+    "docs": "https://github.com/acmesh-official/acme.sh/wiki/dnsapi#dns_zonomi"
+  }
+]

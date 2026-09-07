@@ -1,0 +1,262 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light" />
+    <title>ACME Proxy · Administration</title>
+    <link rel="stylesheet" href="/style.css" />
+    <script src="/app.js" defer></script>
+  </head>
+  <body>
+    <div id="login" class="login-shell">
+      <form id="login-form" class="login-card">
+        <div class="brand"><span class="brand-mark">A</span> ACME Proxy</div>
+        <p class="eyebrow">YOUR DNS CHALLENGE GATEWAY</p>
+        <h1>One place for DNS access.</h1>
+        <p class="muted">
+          Manage provider credentials and give each service access to the
+          domains it needs.
+        </p>
+        <label for="admin-token">Admin token</label
+        ><input
+          id="admin-token"
+          type="password"
+          autocomplete="current-password"
+          required
+          placeholder="Token from your configuration directory"
+        />
+        <button class="primary" type="submit">
+          Open administration <span aria-hidden="true">→</span>
+        </button>
+        <p class="hint">
+          Use the token in <code>admin.token</code>. Your session ends when you
+          reload or close this page.
+        </p>
+        <p id="login-error" class="error" role="alert"></p>
+      </form>
+    </div>
+    <div id="workspace" class="workspace" hidden>
+      <aside>
+        <a href="#providers" class="brand"
+          ><span class="brand-mark">A</span> ACME Proxy</a
+        >
+        <p class="nav-label">ADMINISTRATION</p>
+        <nav aria-label="Main navigation">
+          <button data-tab="providers" class="selected">
+            DNS providers <span>01</span></button
+          ><button data-tab="clients">Clients <span>02</span></button
+          ><button data-tab="challenges">Challenges <span>03</span></button
+          ><button data-tab="activity">Activity <span>04</span></button>
+        </nav>
+        <div class="aside-bottom">
+          <span class="dot"></span> Self-hosted gateway
+          <p>Configuration stored locally</p>
+          <button id="logout" class="subtle">Sign out ↗</button>
+        </div>
+      </aside>
+      <main>
+        <header class="topbar">
+          <span
+            >Workspace <span class="slash">/</span>
+            <strong id="breadcrumb">DNS providers</strong></span
+          ><span class="preview-label">Development preview</span>
+        </header>
+        <div class="content">
+          <div id="notice" role="status" hidden></div>
+          <div class="page-heading">
+            <div>
+              <p class="eyebrow">ACME / DNS-01</p>
+              <h1 id="page-title">DNS providers</h1>
+              <p id="page-description" class="muted">
+                Keep DNS credentials in one place. Route challenges by domain.
+              </p>
+            </div>
+            <button id="add-button" class="primary">+ Add provider</button>
+          </div>
+          <section class="stats" aria-label="Gateway summary">
+            <div>
+              <span>DNS providers</span><strong id="provider-count">0</strong
+              ><small>Configured connections</small>
+            </div>
+            <div>
+              <span>Authorized clients</span><strong id="client-count">0</strong
+              ><small>Active credentials</small>
+            </div>
+            <div>
+              <span>Open challenges</span><strong id="challenge-count">0</strong
+              ><small id="challenge-note">Waiting or published</small>
+            </div>
+          </section>
+          <section id="providers-panel" class="panel">
+            <div class="panel-heading">
+              <h2>Provider connections</h2>
+              <span class="badge">Encrypted credentials</span>
+            </div>
+            <div id="provider-list"></div>
+            <div class="panel-footer">
+              The most specific matching zone handles each new challenge.
+              Provider adapters require live verification before production use.
+            </div>
+          </section>
+          <section id="clients-panel" class="panel" hidden>
+            <div class="panel-heading">
+              <h2>Client access</h2>
+              <span class="badge">Domain-scoped</span>
+            </div>
+            <p class="panel-note">
+              DNS-01 access to a hostname also permits wildcard validation at
+              that hostname. Keep each client’s scope as narrow as possible.
+            </p>
+            <div id="client-list"></div>
+          </section>
+          <section id="challenges-panel" class="panel" hidden>
+            <div class="panel-heading">
+              <h2>Recent challenges</h2>
+              <button id="refresh" class="subtle">Refresh ↻</button>
+            </div>
+            <p class="panel-note">
+              Published means the DNS adapter succeeded. Your ACME client checks
+              DNS propagation. Showing the latest 100 challenges.
+            </p>
+            <div id="challenge-list"></div>
+          </section>
+          <section id="activity-panel" class="panel" hidden>
+            <div class="panel-heading">
+              <h2>Recent activity</h2>
+              <span class="badge">Latest 50 events</span>
+            </div>
+            <div id="audit-list"></div>
+          </section>
+          <div class="config-note">
+            <span class="config-symbol" aria-hidden="true">{ }</span>
+            <p>
+              <strong>Your configuration stays yours.</strong><br />Changes here
+              are saved to <code>config.toml</code>. You can also edit the file
+              and restart the server.
+            </p>
+          </div>
+        </div>
+      </main>
+    </div>
+    <dialog id="provider-dialog">
+      <form id="provider-form">
+        <div class="dialog-heading">
+          <h2 id="provider-dialog-title">Add DNS provider</h2>
+          <button type="button" class="close" aria-label="Close dialog">
+            ×
+          </button>
+        </div>
+        <p class="muted">
+          Connect the DNS account that hosts your challenge records.
+        </p>
+        <input id="provider-id" type="hidden" /><label for="provider-name"
+          >Connection name</label
+        ><input
+          id="provider-name"
+          required
+          maxlength="100"
+          placeholder="Production DNS"
+        />
+        <div class="form-grid">
+          <div>
+            <label for="provider-driver">DNS provider</label
+            ><select id="provider-driver" required></select>
+          </div>
+          <div>
+            <label for="provider-zone">Zone</label
+            ><input id="provider-zone" required placeholder="example.com" />
+          </div>
+        </div>
+        <div class="credentials-heading">
+          <h3>Credentials</h3>
+          <a id="provider-docs" target="_blank" rel="noreferrer"
+            >Provider guide ↗</a
+          >
+        </div>
+        <p class="hint">
+          Fill in the credential option that applies to your account. Some
+          providers offer multiple authentication methods. Saved values are
+          never displayed. Leave all fields blank to keep existing credentials.
+          Existing challenges retain their original credentials; Retry uses the
+          current credentials.
+        </p>
+        <div id="credential-fields"></div>
+        <p id="provider-error" class="error" role="alert"></p>
+        <div class="dialog-actions">
+          <button type="button" class="secondary close">Cancel</button
+          ><button type="submit" class="primary">Save provider</button>
+        </div>
+      </form>
+    </dialog>
+    <dialog id="client-dialog">
+      <form id="client-form">
+        <div class="dialog-heading">
+          <h2>Add client</h2>
+          <button type="button" class="close" aria-label="Close dialog">
+            ×
+          </button>
+        </div>
+        <label for="client-name">Client name</label
+        ><input
+          id="client-name"
+          required
+          maxlength="100"
+          placeholder="Home Assistant"
+        /><label for="client-scopes">Allowed domains</label
+        ><textarea
+          id="client-scopes"
+          required
+          rows="4"
+          placeholder="home.example.com&#10;*.apps.example.com"
+        ></textarea>
+        <p class="hint">
+          One domain per line. An exact domain permits its challenge name.
+          <code>*.apps.example.com</code> permits all descendants, but excludes
+          <code>apps.example.com</code> itself.
+        </p>
+        <p class="callout">
+          Each allowed challenge name can validate both the hostname and its
+          wildcard certificate.
+        </p>
+        <p id="client-error" class="error" role="alert"></p>
+        <div class="dialog-actions">
+          <button type="button" class="secondary close">Cancel</button
+          ><button type="submit" class="primary">Create client</button>
+        </div>
+      </form>
+    </dialog>
+    <dialog id="token-dialog">
+      <div class="dialog-heading">
+        <h2>Client is ready</h2>
+        <button type="button" class="close" aria-label="Close dialog">×</button>
+      </div>
+      <p class="callout">Save this token now. It is shown only once.</p>
+      <label for="new-client-id">Username / client ID</label
+      ><input id="new-client-id" readonly /><label for="new-client-token"
+        >Client token / password</label
+      ><input id="new-client-token" readonly /><label for="client-example"
+        >acme.sh environment</label
+      ><textarea id="client-example" rows="5" readonly></textarea>
+      <p class="hint">
+        Use <code>--dns dns_acmeproxy</code> with acme.sh. Other compatible
+        clients can use HTTP Basic authentication with this ID and token.
+      </p>
+      <div class="dialog-actions">
+        <button id="copy-token" class="secondary">Copy token</button
+        ><button class="primary close">Done</button>
+      </div>
+    </dialog>
+    <dialog id="confirm-dialog">
+      <form id="confirm-form">
+        <h2 id="confirm-title">Confirm action</h2>
+        <p id="confirm-description" class="muted"></p>
+        <p id="confirm-error" class="error" role="alert"></p>
+        <div class="dialog-actions">
+          <button type="button" class="secondary close">Cancel</button
+          ><button type="submit" class="danger">Confirm</button>
+        </div>
+      </form>
+    </dialog>
+  </body>
+</html>
