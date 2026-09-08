@@ -1,6 +1,7 @@
 {
   "name": "acmeproxy-ui-checks",
   "private": true,
+  "license": "MIT",
   "scripts": {
     "test:ui": "playwright test"
   },

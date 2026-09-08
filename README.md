@@ -273,3 +273,7 @@ Container initialization and restart are tested with Podman using
 `python3 scripts/smoke-container.py`. Docker users can select `--engine docker` and
 `--image acmeproxy:dev`; the Docker commands above have not been run against a Docker
 daemon in this workspace.
+
+## License
+
+This project is licensed under the [MIT License](LICENSE).
