@@ -90,6 +90,24 @@ pub fn router(app: App) -> Router {
                 )
             }),
         )
+        .route(
+            "/brand/icon.png",
+            get(|| async {
+                (
+                    [(header::CONTENT_TYPE, "image/png")],
+                    include_bytes!("../web/brand/icon.png").as_slice(),
+                )
+            }),
+        )
+        .route(
+            "/brand/logo.png",
+            get(|| async {
+                (
+                    [(header::CONTENT_TYPE, "image/png")],
+                    include_bytes!("../web/brand/logo.png").as_slice(),
+                )
+            }),
+        )
         .route("/healthz", get(health))
         .route("/present", post(present))
         .route("/cleanup", post(cleanup))

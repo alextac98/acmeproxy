@@ -5,13 +5,15 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="color-scheme" content="light" />
     <title>ACME Proxy · Administration</title>
+    <link rel="icon" type="image/png" href="/brand/icon.png" />
+    <link rel="apple-touch-icon" href="/brand/icon.png" />
     <link rel="stylesheet" href="/style.css" />
     <script src="/app.js" defer></script>
   </head>
   <body>
     <div id="login" class="login-shell">
       <form id="login-form" class="login-card">
-        <div class="brand"><span class="brand-mark">A</span> ACME Proxy</div>
+        <div class="brand"><img class="brand-logo" src="/brand/logo.png" alt="ACME Proxy" width="2172" height="724" /></div>
         <h1>One place for DNS access.</h1>
         <label for="admin-token">Admin token</label
         ><input
@@ -34,7 +36,7 @@
     <div id="workspace" class="workspace" hidden>
       <aside>
         <a href="/providers" class="brand"
-          ><span class="brand-mark">A</span> ACME Proxy</a
+          ><img class="brand-mark" src="/brand/icon.png" alt="" width="1254" height="1254" /> ACME Proxy</a
         >
         <nav aria-label="Main navigation">
           <a href="/providers" data-tab="providers" class="selected">DNS providers</a>

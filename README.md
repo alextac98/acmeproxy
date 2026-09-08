@@ -1,5 +1,7 @@
 # ACME Proxy
 
+<img src="web/brand/logo.png" alt="ACME Proxy logo" width="360" />
+
 A self-hosted DNS-01 challenge gateway with a small admin UI. Keep DNS API credentials
 in one place and issue revocable, domain-scoped credentials to services on your network.
 Services continue to manage their own certificates and private keys.
