@@ -1,0 +1,123 @@
+name: Prepare Release
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: release-prepare
+  cancel-in-progress: false
+jobs:
+  preflight:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    outputs:
+      version: ${{ steps.meta.outputs.version }}
+      image: ${{ steps.meta.outputs.image }}
+      candidate: ${{ steps.meta.outputs.candidate }}
+      previous: ${{ steps.meta.outputs.previous }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - id: meta
+        run: python3 scripts/release.py preflight
+        env:
+          GH_TOKEN: ${{ github.token }}
+  checks:
+    needs: preflight
+    uses: ./.github/workflows/ci.yml
+  image:
+    needs: [preflight, checks]
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-24.04
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+      - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+      - uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        id: build
+        with:
+          context: .
+          platforms: linux/${{ matrix.arch }}
+          push: true
+          tags: ${{ needs.preflight.outputs.image }}:${{ needs.preflight.outputs.candidate }}-${{ matrix.arch }}
+          build-args: |
+            VERSION=${{ needs.preflight.outputs.version }}
+            VCS_REF=${{ github.sha }}
+            RELEASE_BUILD=true
+          provenance: mode=max
+          sbom: true
+          cache-from: type=gha,scope=release-${{ matrix.arch }}
+          cache-to: type=gha,scope=release-${{ matrix.arch }},mode=max
+      - name: Test actual image and Compose deployment
+        env:
+          IMAGE: ${{ needs.preflight.outputs.image }}@${{ steps.build.outputs.digest }}
+          PREVIOUS_IMAGE: ${{ needs.preflight.outputs.previous }}
+        run: python3 scripts/smoke-compose.py --image "$IMAGE" --previous-image "$PREVIOUS_IMAGE"
+      - name: Record tested digest
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+          ARCH: ${{ matrix.arch }}
+        run: |
+          mkdir -p digests
+          echo "$DIGEST" > "digests/$ARCH"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: digest-${{ matrix.arch }}
+          path: digests/*
+          if-no-files-found: error
+  draft:
+    needs: [preflight, image]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: write
+      packages: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+      - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          pattern: digest-*
+          path: digests
+          merge-multiple: true
+      - name: Assemble tested architectures
+        env:
+          IMAGE: ${{ needs.preflight.outputs.image }}
+          CANDIDATE: ${{ needs.preflight.outputs.candidate }}
+        run: |
+          docker buildx imagetools create --tag "$IMAGE:$CANDIDATE" "$IMAGE@$(cat digests/amd64)" "$IMAGE@$(cat digests/arm64)"
+      - name: Create kit and draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          IMAGE: ${{ needs.preflight.outputs.image }}
+          CANDIDATE: ${{ needs.preflight.outputs.candidate }}
+          PREVIOUS_IMAGE: ${{ needs.preflight.outputs.previous }}
+        run: python3 scripts/release.py prepare --image "$IMAGE" --candidate "$CANDIDATE" --previous "$PREVIOUS_IMAGE" --directory release-output
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: release-candidate
+          path: |
+            release-output/*.tar.gz
+            release-output/release.json
+            release-output/SHA256SUMS
+          retention-days: 90
+          if-no-files-found: error

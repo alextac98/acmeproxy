@@ -726,7 +726,9 @@ dialog > form > h2 {
     font-size: 1rem;
   }
   .aside-bottom {
-    display: none;
+    margin-top: 14px;
+    padding-top: 10px;
+    display: block;
   }
   nav {
     flex-direction: row;
@@ -878,4 +880,116 @@ dialog > form > h2 {
 }
 main {
   min-width: 0;
+}
+
+.app-version {
+  display: block;
+  text-align: center;
+  color: var(--nav-text);
+  font-size: 0.75rem;
+  margin-bottom: 10px;
+  overflow-wrap: anywhere;
+}
+
+.utility-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.utility-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  color: var(--nav-text);
+  border: 1px solid var(--nav-hover);
+  border-radius: 8px;
+}
+.utility-icon.selected {
+  color: var(--brand-cyan);
+  border-color: var(--brand-cyan);
+  background: var(--nav-selected);
+}
+.utility-icon:hover {
+  color: var(--surface);
+  background: var(--nav-hover);
+}
+.about-page {
+  max-width: 840px;
+}
+.about-intro {
+  padding: clamp(22px, 4vw, 40px);
+}
+.about-intro .brand-logo {
+  width: 330px;
+  margin-bottom: 24px;
+}
+.about-intro h2 {
+  font-size: 1.7rem;
+  letter-spacing: -0.035em;
+  margin-bottom: 16px;
+}
+.about-intro p {
+  margin-top: 12px;
+  max-width: 65ch;
+}
+.about-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin: 26px 0;
+}
+.about-build {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+  margin: 0;
+  padding: 22px 0;
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+}
+.about-build dt {
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+.about-build dd {
+  margin: 5px 0 0;
+  overflow-wrap: anywhere;
+  font-weight: 600;
+}
+.about-credit {
+  color: var(--muted);
+  font-size: 0.875rem;
+}
+.credit-heart {
+  color: var(--brand-blue);
+  vertical-align: -2px;
+}
+.about-attributions {
+  margin-top: 18px;
+}
+.about-attributions summary {
+  padding: 20px 24px;
+  cursor: pointer;
+  font-weight: 600;
+}
+.about-attributions summary:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: -3px;
+}
+.about-attributions > div {
+  display: grid;
+  gap: 18px;
+  padding: 0 24px 24px;
+  font-size: 0.875rem;
+}
+@media (max-width: 720px) {
+  .about-build {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .about-build > div:first-child {
+    grid-column: 1 / -1;
+  }
 }

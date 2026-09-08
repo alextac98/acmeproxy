@@ -45,7 +45,18 @@
           <a href="/activity" data-tab="activity">Activity</a>
         </nav>
         <div class="aside-bottom">
-          <button id="logout" class="subtle">Sign out ↗</button>
+          <a id="app-version" class="app-version" target="_blank" rel="noreferrer">Version unavailable</a>
+          <div class="utility-actions">
+            <a class="utility-icon" href="/about" data-tab="about" aria-label="About" title="About ACME Proxy">
+              <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v6m0-10h.01"/></svg>
+            </a>
+            <a class="utility-icon report-problem" href="https://github.com/alextac98/acmeproxy/issues/new/choose" target="_blank" rel="noreferrer" aria-label="Report a problem" title="Report a problem">
+              <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 11.5a8.5 8.5 0 0 1-8.5 8.5 9 9 0 0 1-4-.9L3 21l1.9-5.5a9 9 0 0 1-.9-4A8.5 8.5 0 0 1 12.5 3H13a8.5 8.5 0 0 1 8 8v.5Z"/><path d="M12 7v5m0 4h.01"/></svg>
+            </a>
+            <button id="logout" class="utility-icon" type="button" aria-label="Sign out" title="Sign out">
+              <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4m7 14 5-5-5-5m5 5H9"/></svg>
+            </button>
+          </div>
         </div>
       </aside>
       <main>
@@ -57,7 +68,7 @@
             </div>
             <button id="add-button" class="primary">+ Add provider</button>
           </div>
-          <section class="stats" aria-label="Gateway summary">
+          <section id="gateway-summary" class="stats" aria-label="Gateway summary">
             <div>
               <span>DNS providers</span><strong id="provider-count">0</strong
               >
@@ -70,6 +81,32 @@
               <span>Open challenges</span><strong id="challenge-count">0</strong
               ><small id="challenge-note" hidden></small>
             </div>
+          </section>
+          <section id="about-panel" class="about-page" aria-label="About ACME Proxy" hidden>
+            <div class="panel about-intro">
+              <img class="brand-logo" src="/brand/logo.png" alt="ACME Proxy" width="2172" height="724" />
+              <h2>One place for DNS access.</h2>
+              <p>ACME Proxy connects your certificate tools to your DNS providers. Keep provider credentials in one place and give each service access to just the domains it needs.</p>
+              <p class="muted">Self-hosted, open source, and built to keep your certificates and private keys with your services.</p>
+              <div class="about-links">
+                <a class="primary" href="https://github.com/alextac98/acmeproxy" target="_blank" rel="noreferrer">View source on GitHub ↗</a>
+                <a class="secondary report-problem" href="https://github.com/alextac98/acmeproxy/issues/new/choose" target="_blank" rel="noreferrer">Report a problem ↗</a>
+              </div>
+              <dl class="about-build">
+                <div><dt>Version</dt><dd id="about-version">Unavailable</dd></div>
+                <div><dt>Build</dt><dd id="about-build">Unavailable</dd></div>
+                <div><dt>License</dt><dd><a href="https://github.com/alextac98/acmeproxy/blob/main/LICENSE" target="_blank" rel="noreferrer">MIT ↗</a></dd></div>
+              </dl>
+              <p class="about-credit">Made with <svg class="credit-heart" viewBox="0 0 24 24" width="16" height="16" fill="currentColor" role="img" aria-label="love"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1.1-1.1a5.5 5.5 0 0 0-7.8 7.8L12 21l8.8-8.6a5.5 5.5 0 0 0 0-7.8Z"/></svg> by <a href="https://alextac.com" target="_blank" rel="noreferrer">Alex Tacescu</a> and <a href="https://github.com/alextac98/acmeproxy/graphs/contributors" target="_blank" rel="noreferrer">contributors</a>.</p>
+            </div>
+            <details class="panel about-attributions">
+              <summary>Attributions</summary>
+              <div>
+                <p><a href="https://github.com/acmesh-official/acme.sh" target="_blank" rel="noreferrer">acme.sh ↗</a><br />The DNS adapters that connect ACME Proxy to provider APIs.</p>
+                <p><a href="https://github.com/MadCamel/acmeproxy.pl" target="_blank" rel="noreferrer">acmeproxy.pl ↗</a><br />The original inspiration for this project!</p>
+                <p class="muted">Third-party components retain their upstream licenses.</p>
+              </div>
+            </details>
           </section>
           <section id="providers-panel" class="panel">
             <div class="panel-heading">

@@ -72,6 +72,7 @@ pub fn router(app: App) -> Router {
         .route("/clients", get(admin_page))
         .route("/validations", get(admin_page))
         .route("/activity", get(admin_page))
+        .route("/about", get(admin_page))
         .route(
             "/app.js",
             get(|| async {
@@ -200,9 +201,10 @@ async fn client_auth(app: &App, headers: &HeaderMap) -> Result<(String, Vec<Stri
 
 async fn health(State(app): State<App>) -> Result<Json<Value>> {
     sqlx::query("SELECT 1").execute(&app.db).await?;
-    Ok(Json(
-        json!({"status":"ok","version":env!("CARGO_PKG_VERSION")}),
-    ))
+    let mut health =
+        serde_json::to_value(crate::build_info::current()).expect("build metadata is serializable");
+    health["status"] = json!("ok");
+    Ok(Json(health))
 }
 
 #[derive(Default, Deserialize)]

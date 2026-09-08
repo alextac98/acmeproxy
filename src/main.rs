@@ -25,6 +25,13 @@ async fn main() -> anyhow::Result<()> {
         .init();
     let mut args = std::env::args().skip(1);
     let mode = args.next().unwrap_or_else(|| "serve".into());
+    if mode == "--version" {
+        println!(
+            "acmeproxy {}",
+            acmeproxy::build_info::current().display_version
+        );
+        return Ok(());
+    }
     let data = match args.next().as_deref() {
         Some("--config-dir") => PathBuf::from(
             args.next()

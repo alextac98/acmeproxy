@@ -31,6 +31,10 @@ services:
         - action: rebuild
           path: ./migrations
         - action: rebuild
+          path: ./build.rs
+        - action: rebuild
+          path: ./.git
+        - action: rebuild
           path: ./Cargo.toml
         - action: rebuild
           path: ./Cargo.lock

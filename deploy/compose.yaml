@@ -1,0 +1,26 @@
+# Generated release kits replace @IMAGE@ with a version AND immutable image digest.
+name: acmeproxy
+services:
+  acmeproxy:
+    image: @IMAGE@
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8080:8080"
+    volumes:
+      - config:/config
+    tmpfs:
+      - /config/scratch:rw,noexec,nosuid,nodev,size=64m,uid=10001,gid=10001,mode=0700
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    stop_grace_period: 45s
+    healthcheck:
+      test: [CMD, curl, --fail, --silent, http://127.0.0.1:8080/healthz]
+      interval: 10s
+      timeout: 3s
+      start_period: 20s
+      retries: 3
+volumes:
+  config:
+    name: acmeproxy-config

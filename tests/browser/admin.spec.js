@@ -456,3 +456,80 @@ for (const width of [1280, 390]) {
     await page.screenshot({ path: `test-results/activity-${width}.png`, fullPage: true });
   });
 }
+
+for (const width of [1280, 390]) {
+  test(`about page and problem reporting work at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 });
+    const revision = 'a'.repeat(40);
+    await page.route('**/healthz', route => route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify({ status: 'ok', version: '2.3.4', revision, release: false, dirty: true, display_version: 'v2.3.4-aaaaaaa-dirty', version_url: `https://github.com/alextac98/acmeproxy/commit/${revision}` }),
+    }));
+    const response = await page.goto('/about');
+    expect(response.status()).toBe(200);
+    await page.getByLabel('Admin token', { exact: true }).fill('browser-test-admin-token-not-for-deployment');
+    await page.getByRole('button', { name: 'Open administration' }).click();
+    await expect(page.locator('#page-title')).toHaveText('About');
+    await expect(page.locator('#about-panel')).toBeVisible();
+    await expect(page.locator('#gateway-summary')).toBeHidden();
+    await expect(page.locator('#add-button')).toBeHidden();
+    await expect(page.locator('#about-version')).toHaveText('v2.3.4-aaaaaaa-dirty');
+    await expect(page.locator('#app-version')).toHaveText('v2.3.4-aaaaaaa-dirty');
+    await expect(page.locator('#app-version')).toHaveAttribute('href', `https://github.com/alextac98/acmeproxy/commit/${revision}`);
+    await expect(page.locator('#app-version')).toHaveAttribute('target', '_blank');
+    expect(await page.locator('#app-version').evaluate(el => getComputedStyle(el).textAlign)).toBe('center');
+    await expect(page.locator('#app-version')).not.toHaveAttribute('data-tab');
+    await expect(page.locator('#about-build a')).toHaveAttribute('href', `https://github.com/alextac98/acmeproxy/commit/${revision}`);
+    await expect(page.locator('.utility-actions').getByRole('link', { name: 'About', exact: true }))
+      .toHaveAttribute('aria-current', 'page');
+    const report = page.getByRole('link', { name: 'Report a problem', exact: true });
+    await expect(report).toBeVisible();
+    await report.focus();
+    await expect(report).toBeFocused();
+    for (const link of await page.locator('.report-problem').all()) {
+      await expect(link).toHaveAttribute('href', 'https://github.com/alextac98/acmeproxy/issues/new/choose');
+    }
+    await expect(report).toHaveAttribute('target', '_blank');
+    await page.getByText('Attributions', { exact: true }).click();
+    await expect(page.locator('.about-attributions')).toHaveAttribute('open', '');
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    await page.screenshot({ path: `test-results/about-${width}.png`, fullPage: true });
+    await page.getByRole('navigation').getByRole('link', { name: 'DNS providers', exact: true }).click();
+    await expect(page.locator('#gateway-summary')).toBeVisible();
+    await page.locator('.utility-actions').getByRole('link', { name: 'About', exact: true }).click();
+    await expect(page).toHaveURL(/\/about$/);
+    await page.goBack();
+    await expect(page).toHaveURL(/\/providers$/);
+    await expect(page.locator('#about-panel')).toBeHidden();
+  });
+}
+
+test('about identifies a local build without inventing a commit link', async ({ page }) => {
+  await page.route('**/healthz', route => route.fulfill({
+    contentType: 'application/json',
+    body: JSON.stringify({ status: 'ok', version: '0.1.0', revision: 'unknown', display_version: 'v0.1.0-dev', version_url: null, release: false, dirty: false }),
+  }));
+  await page.goto('/about');
+  await expect(page.locator('#about-build')).toHaveText('Local build');
+  await expect(page.locator('#about-build a')).toHaveCount(0);
+  await expect(page.locator('#app-version')).toHaveText('v0.1.0-dev');
+  await expect(page.locator('#app-version')).not.toHaveAttribute('href');
+});
+
+for (const released of [false, true]) {
+  test(`version links to ${released ? 'release' : 'clean dev commit'}`, async ({ page }) => {
+    const revision = 'b'.repeat(40);
+    const versionUrl = released ? 'https://github.com/alextac98/acmeproxy/releases/tag/v0.1.0'
+      : `https://github.com/alextac98/acmeproxy/commit/${revision}`;
+    const display = released ? 'v0.1.0' : 'v0.1.0-bbbbbbb';
+    await page.route('**/healthz', route => route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify({ status: 'ok', version: '0.1.0', revision, release: released, dirty: false, display_version: display, version_url: versionUrl }),
+    }));
+    await page.goto('/about');
+    await expect(page.locator('#app-version')).toHaveText(display);
+    await expect(page.locator('#app-version')).toHaveAttribute('href', versionUrl);
+    await expect(page.locator('#app-version')).toHaveAttribute('target', '_blank');
+    await expect(page.locator('#app-version')).not.toHaveAttribute('data-tab');
+  });
+}

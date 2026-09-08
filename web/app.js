@@ -19,6 +19,7 @@ const tabs = {
   clients: ["Clients", "+ Add client", "/clients"],
   challenges: ["DNS validations", null, "/validations"],
   activity: ["Activity", null, "/activity"],
+  about: ["About", null, "/about"],
 };
 function node(tag, className, text) {
   const el = document.createElement(tag);
@@ -189,6 +190,7 @@ function switchTab(tab, navigation = "push") {
   currentTab = tab;
   document.title = tabs[tab][0] + " · ACME Proxy";
   $("page-title").textContent = tabs[tab][0];
+  $("gateway-summary").hidden = tab === "about";
   $("add-button").hidden = !tabs[tab][1];
   $("add-button").textContent = tabs[tab][1];
   Object.keys(tabs).forEach((key) => ($(key + "-panel").hidden = key !== tab));
@@ -197,8 +199,11 @@ function switchTab(tab, navigation = "push") {
     .forEach((link) => {
       const selected = link.dataset.tab === tab;
       link.classList.toggle("selected", selected);
-      if (selected) link.setAttribute("aria-current", "page");
-      else link.removeAttribute("aria-current");
+      if (selected) {
+        link.setAttribute("aria-current", "page");
+        if (link.closest("nav") && !$("workspace").hidden)
+          link.scrollIntoView({ block: "nearest", inline: "nearest" });
+      } else link.removeAttribute("aria-current");
     });
   if (changed && tab === "activity" && data)
     loadActivity().catch(showActivityError);
@@ -730,3 +735,31 @@ $("confirm-form").onsubmit = async (event) => {
     button.disabled = false;
   }
 };
+
+fetch("/healthz")
+  .then((response) => response.ok ? response.json() : null)
+  .then((health) => {
+    if (!health) return;
+    const version = health.display_version || `v${health.version}`;
+    $("app-version").textContent = version;
+    $("about-version").textContent = version;
+    if (health.version_url) {
+      $("app-version").href = health.version_url;
+      $("app-version").title = health.release ? "View release on GitHub" : "View commit on GitHub";
+    } else {
+      $("app-version").removeAttribute("href");
+      $("app-version").title = "Build commit unavailable";
+    }
+    const revision = /^[a-f0-9]{40}$/.test(health.revision || "") ? health.revision : null;
+    if (revision) {
+      const commit = node("a", "", revision.slice(0, 7));
+      commit.href = `https://github.com/alextac98/acmeproxy/commit/${revision}`;
+      commit.target = "_blank";
+      commit.rel = "noreferrer";
+      $("about-build").replaceChildren(commit);
+    } else {
+      $("about-build").textContent = "Local build";
+    }
+
+  })
+  .catch(() => {});

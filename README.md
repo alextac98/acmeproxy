@@ -11,7 +11,15 @@ DNS provider. The catalog contains 184 available acme.sh adapters; those provide
 not been live-verified here. Read the [architecture and rollout plan](docs/PLAN.md) for
 the remaining reliability and security gates before a production release.
 
-## Run locally
+## Docker releases
+
+The first planned release is **0.1.0**. Once published, download its deployment kit from [GitHub Releases](https://github.com/alextac98/acmeproxy/releases) and follow `INSTALL.md`. You only need Docker and Compose.
+
+[Install](deploy/INSTALL.md) · [Upgrade and restore](deploy/UPGRADE.md) · [Make a release](docs/RELEASING.md)
+
+Use a release kit for deployment; the root Compose file is for development. Updates are manual.
+
+## Run locally (development)
 
 Requires Linux, a current stable Rust toolchain, Bash, curl, openssl, tar, and standard Unix tools.
 Some DNS providers require additional tools. Node is not needed to run the application.
