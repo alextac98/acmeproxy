@@ -89,83 +89,112 @@ class ReleaseTests(unittest.TestCase):
             with self.assertRaises(RuntimeError):
                 release.api('test', optional=True)
 
-    def test_publish_rejects_untrusted_run_before_download(self):
+    def test_release_rejects_other_branches(self):
         from argparse import Namespace
-        env = {'GITHUB_REF': 'refs/heads/main', 'GITHUB_REPOSITORY': 'alextac98/acmeproxy'}
-        record = {'path': '.github/workflows/ci.yml', 'event': 'push', 'head_branch': 'main', 'conclusion': 'success'}
-        with patch.dict(release.os.environ, env), patch.object(release, 'api', return_value=record), patch.object(release, 'run') as run:
-            with self.assertRaises(ValueError):
-                release.publish(Namespace(run_id='123', directory='unused'))
+        with patch.dict(release.os.environ, {'GITHUB_REF': 'refs/heads/feature'}), patch.object(release, 'run') as run:
+            with self.assertRaisesRegex(ValueError, 'main'):
+                release.release(Namespace())
             run.assert_not_called()
 
-    def simulate_publish(self, stable=False, conflicting=False, already_published=False):
+    def test_preflight_rejects_an_existing_version(self):
+        env = {'GITHUB_REF': 'refs/heads/main', 'GITHUB_REPOSITORY': 'alextac98/acmeproxy'}
+        with patch.dict(release.os.environ, env), patch.object(release, 'project_version', return_value='0.1.0'), \
+             patch.object(release, 'api', return_value={'object': {}}), patch.object(release, 'output') as output:
+            with self.assertRaisesRegex(ValueError, 'already exists'):
+                release.preflight()
+            output.assert_not_called()
+
+    def simulate_release(self, stable=True, existing=None, conflict=None, missing_tag=False):
         from argparse import Namespace
         from subprocess import CompletedProcess
-        import hashlib
         import shutil
         meta = metadata()
         if not stable:
             meta.update(version='0.1.0-beta.1', tag='v0.1.0-beta.1')
-        record = {'path': '.github/workflows/prepare-release.yml', 'event': 'workflow_dispatch',
-                  'head_branch': 'main', 'conclusion': 'success', 'head_sha': meta['commit'], 'run_attempt': 1}
         calls = []
         with tempfile.TemporaryDirectory() as tmp:
             base = Path(tmp)
             source = base / 'source'
-            source.mkdir()
-            (source / 'release.json').write_text(json.dumps(meta))
-            archive = source / f"acmeproxy-{meta['version']}-deploy.tar.gz"
-            archive.write_bytes(b'tested archive')
-            (source / 'SHA256SUMS').write_text(''.join(
-                f'{hashlib.sha256(p.read_bytes()).hexdigest()}  {p.name}\n'
-                for p in [source / 'release.json', archive]))
+            release.kit(meta, source)
 
             def command(*args, **kwargs):
                 calls.append(args)
-                if args[:3] in [('gh', 'run', 'download'), ('gh', 'release', 'download')]:
+                if args[:3] == ('gh', 'release', 'download'):
                     destination = Path(args[args.index('--dir') + 1])
                     for p in source.iterdir():
-                        shutil.copyfile(p, destination / p.name)
+                        if p.is_file():
+                            shutil.copyfile(p, destination / p.name)
+                if '--raw' in args:
+                    return json.dumps({'manifests': [{'platform': {'os': 'linux', 'architecture': a}}
+                                                   for a in (['amd64'] if conflict == 'platform' else ['amd64', 'arm64'])]})
                 return ''
 
-            def request(path, *args, **kwargs):
-                if '/actions/runs/' in path:
-                    return record
-                if '/releases/tags/' in path:
-                    return {'draft': not already_published}
-                return {'object': {'type': 'commit', 'sha': meta['commit']}}
-
             def image_digest(ref):
-                if conflicting and ref.endswith(':' + meta['version']):
+                if conflict == 'image' and ref.endswith(':' + meta['version']):
                     return 'sha256:' + 'c' * 64
                 return meta['digest']
 
-            env = {'GITHUB_REF': 'refs/heads/main', 'GITHUB_REPOSITORY': 'alextac98/acmeproxy'}
+            def request(path, payload=None, **kwargs):
+                if payload:
+                    calls.append(('git-tag', payload['ref'], payload['sha']))
+                return None if missing_tag else {'object': {'type': 'commit', 'sha': meta['commit']}}
+
+            current = None if existing is None else {'draft': existing == 'draft',
+                'target_commitish': 'c' * 40 if conflict == 'commit' else meta['commit']}
+            env = {'GITHUB_REF': 'refs/heads/main', 'GITHUB_REPOSITORY': 'alextac98/acmeproxy',
+                   'GITHUB_SHA': meta['commit'], 'GITHUB_RUN_ID': '123', 'GITHUB_RUN_ATTEMPT': '2'}
+            inspection = CompletedProcess([], 1, '', 'manifest unknown') if missing_tag else CompletedProcess([], 0, '', '')
             with patch.dict(release.os.environ, env), patch.object(release, 'api', side_effect=request), \
-                 patch.object(release, 'run', side_effect=command), patch.object(release, 'releases', return_value=[]), \
+                 patch.object(release, 'run', side_effect=command), patch.object(release, 'project_version', return_value=meta['version']), \
+                 patch.object(release, 'releases', return_value=[{'tag_name': 'v9.0.0'}] if conflict == 'older' else []), \
                  patch.object(release, 'digest', side_effect=image_digest), patch.object(release, 'anonymous_pull'), \
-                 patch.object(release, 'find_release', return_value={'draft': not already_published}), \
-                 patch.object(release.subprocess, 'run', return_value=CompletedProcess([], 0, '', '')):
-                release.publish(Namespace(run_id='123', directory=str(base / 'download')))
+                 patch.object(release, 'find_release', return_value=current), \
+                 patch.object(release.subprocess, 'run', return_value=inspection):
+                release.release(Namespace(image=meta['image'], build_tag='0.1.0-build-123', previous='', directory=str(base / 'output')))
         return calls
 
-    def test_beta_publish_does_not_advance_latest(self):
-        calls = self.simulate_publish()
+    def test_single_run_creates_assets_and_publishes_stable_release(self):
+        calls = self.simulate_release(missing_tag=True)
+        create = next(c for c in calls if c[:3] == ('gh', 'release', 'create'))
+        self.assertTrue(any(c.endswith('.tar.gz') for c in create))
+        edit = next(c for c in calls if c[:3] == ('gh', 'release', 'edit'))
+        self.assertIn('--draft=false', edit)
+        self.assertIn('--latest=true', edit)
+        self.assertIn(('git-tag', 'refs/tags/v0.1.0', 'a' * 40), calls)
+        promotions = [c for c in calls if c[:4] == ('docker', 'buildx', 'imagetools', 'create')]
+        self.assertEqual(len(promotions), 2)
+        self.assertIn('ghcr.io/alextac98/acmeproxy:0.1.0', promotions[0])
+        self.assertIn('ghcr.io/alextac98/acmeproxy:latest', promotions[1])
+
+    def test_beta_does_not_advance_latest(self):
+        calls = self.simulate_release(stable=False)
         edit = next(c for c in calls if c[:3] == ('gh', 'release', 'edit'))
         self.assertIn('--prerelease=true', edit)
         self.assertIn('--latest=false', edit)
         self.assertFalse(any(c[:4] == ('docker', 'buildx', 'imagetools', 'create') for c in calls))
 
-    def test_stable_retry_repairs_latest_without_rebuilding(self):
-        calls = self.simulate_publish(stable=True, already_published=True)
-        self.assertFalse(any(c[:3] == ('gh', 'release', 'edit') for c in calls))
-        promotion = next(c for c in calls if c[:4] == ('docker', 'buildx', 'imagetools', 'create'))
-        self.assertIn('ghcr.io/alextac98/acmeproxy:latest', promotion)
-        self.assertTrue(promotion[-1].endswith('@sha256:' + 'b' * 64))
+    def test_published_retry_only_repairs_latest(self):
+        calls = self.simulate_release(existing='published')
+        self.assertFalse(any(c[:3] in [('gh', 'release', 'edit'), ('gh', 'release', 'upload'), ('gh', 'release', 'create')] for c in calls))
+        self.assertTrue(any('ghcr.io/alextac98/acmeproxy:latest' in c for c in calls))
 
-    def test_existing_version_cannot_be_overwritten(self):
-        with self.assertRaisesRegex(ValueError, 'different contents'):
-            self.simulate_publish(conflicting=True)
+    def test_draft_retry_finishes_automatically(self):
+        calls = self.simulate_release(existing='draft')
+        self.assertTrue(any(c[:3] == ('gh', 'release', 'upload') for c in calls))
+        self.assertTrue(any('--draft=false' in c for c in calls))
+
+    def test_conflicting_release_or_incomplete_image_rejected(self):
+        for conflict in ('image', 'commit', 'platform', 'older'):
+            with self.subTest(conflict=conflict), self.assertRaises(ValueError):
+                self.simulate_release(existing='published', conflict=conflict)
+
+    def test_description_is_rendered_for_the_release(self):
+        description = release.release_description(metadata(), 'alextac98/acmeproxy')
+        self.assertIn('ghcr.io/alextac98/acmeproxy:0.1.0', description)
+        self.assertIn('/releases/download/v0.1.0/', description)
+        self.assertIn('docker compose up -d --wait', description)
+        self.assertNotIn('Prepare', description)
+        self.assertNotIn('{{', description)
 
 
 if __name__ == '__main__':

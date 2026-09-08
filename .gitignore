@@ -12,5 +12,4 @@
 *.token
 
 /release-output/
-/release-download/
 __pycache__/

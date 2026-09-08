@@ -1,0 +1,31 @@
+Docker image: `{{ release.image }}:{{ release.version }}`
+
+## Install
+
+Requires Docker Engine and Docker Compose. Run on a host with port 8080 free; configuration is stored in the `acmeproxy-config` volume.
+
+```sh
+curl -fLO {{ download }}/{{ folder }}.tar.gz
+curl -fLO {{ download }}/SHA256SUMS
+sha256sum --ignore-missing --check SHA256SUMS
+tar -xzf {{ folder }}.tar.gz
+cd {{ folder }}
+docker compose up -d --wait
+docker compose exec acmeproxy cat /config/admin.token
+```
+
+Stop if checksum verification fails. Open http://127.0.0.1:8080 and sign in with the displayed token.
+
+[Full installation guide]({{ source }}/deploy/INSTALL.md) · [Upgrade and backup guide]({{ source }}/deploy/UPGRADE.md)
+
+The deployment kit pins the exact tested image. Updates are manual; back up your configuration before upgrading.
+
+<details>
+<summary>Build details</summary>
+
+- Commit: [{{ release.commit[:7] }}](https://github.com/{{ repo }}/commit/{{ release.commit }})
+- Image digest: `{{ release.digest }}`
+- [Release workflow](https://github.com/{{ repo }}/actions/runs/{{ release.run_id }})
+- Linux AMD64 and ARM64; SBOM and provenance attestations included.
+
+</details>
