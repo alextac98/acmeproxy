@@ -1,7 +1,7 @@
 use crate::{App, config, now, security};
 use axum::{
     Json, Router,
-    extract::{DefaultBodyLimit, Path, Request, State},
+    extract::{DefaultBodyLimit, Path, Query, Request, State},
     http::{HeaderMap, StatusCode, header},
     middleware::{self, Next},
     response::{Html, IntoResponse, Response},
@@ -53,6 +53,8 @@ fn unauthorized() -> Error {
 pub fn router(app: App) -> Router {
     let admin = Router::new()
         .route("/overview", get(overview))
+        .route("/activity", get(activity))
+        .route("/activity/retention", put(activity_retention))
         .route("/providers", post(create_provider))
         .route(
             "/providers/{id}",
@@ -60,14 +62,16 @@ pub fn router(app: App) -> Router {
         )
         .route("/clients", post(create_client))
         .route("/clients/{id}", delete(revoke_client))
+        .route("/clients/{id}/permanent", delete(delete_client))
         .route("/challenges/{id}/retry", post(retry_challenge))
         .route("/challenges/{id}/cleanup", post(admin_cleanup))
         .route_layer(middleware::from_fn_with_state(app.clone(), admin_auth));
     Router::new()
-        .route(
-            "/",
-            get(|| async { Html(include_str!("../web/index.html")) }),
-        )
+        .route("/", get(admin_page))
+        .route("/providers", get(admin_page))
+        .route("/clients", get(admin_page))
+        .route("/validations", get(admin_page))
+        .route("/activity", get(admin_page))
         .route(
             "/app.js",
             get(|| async {
@@ -97,6 +101,10 @@ pub fn router(app: App) -> Router {
             security_headers,
         ))
         .with_state(app)
+}
+
+async fn admin_page() -> Html<&'static str> {
+    Html(include_str!("../web/index.html"))
 }
 
 async fn security_headers(State(app): State<App>, request: Request, next: Next) -> Response {
@@ -179,13 +187,86 @@ async fn health(State(app): State<App>) -> Result<Json<Value>> {
     ))
 }
 
+#[derive(Default, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+struct ActivityQuery {
+    before: Option<i64>,
+    search: String,
+}
+
+async fn activity(
+    State(app): State<App>,
+    Query(query): Query<ActivityQuery>,
+) -> Result<Json<Value>> {
+    if query.search.len() > 200 || query.before.is_some_and(|id| id <= 0) {
+        return Err(bad(
+            "invalid activity cursor or search (maximum 200 characters)",
+        ));
+    }
+    let search = query.search.trim().to_lowercase();
+    let mut tx = app.db.begin().await?;
+    let retention: i64 = sqlx::query_scalar("SELECT COALESCE((SELECT CAST(value AS INTEGER) FROM metadata WHERE key='audit_retention'),1000)")
+        .fetch_one(&mut *tx).await?;
+    let stored: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM audit")
+        .fetch_one(&mut *tx)
+        .await?;
+    let rows = sqlx::query("SELECT * FROM audit WHERE (? IS NULL OR id < ?) AND instr(lower(actor || ' ' || action || ' ' || target || ' ' || outcome), ?) > 0 ORDER BY id DESC LIMIT 51")
+        .bind(query.before).bind(query.before).bind(&search).fetch_all(&mut *tx).await?;
+    let next_before = if rows.len() > 50 {
+        Some(rows[49].get::<i64, _>("id"))
+    } else {
+        None
+    };
+    let events: Vec<Value> = rows
+        .iter()
+        .take(50)
+        .map(|r| {
+            json!({
+                "id":r.get::<i64,_>("id"), "at":r.get::<i64,_>("at"),
+                "actor":r.get::<String,_>("actor"), "action":r.get::<String,_>("action"),
+                "target":r.get::<String,_>("target"), "outcome":r.get::<String,_>("outcome")
+            })
+        })
+        .collect();
+    tx.commit().await?;
+    Ok(Json(
+        json!({"events":events,"stored":stored,"retention":retention,"next_before":next_before}),
+    ))
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RetentionInput {
+    retention: i64,
+}
+
+async fn activity_retention(
+    State(app): State<App>,
+    Json(input): Json<RetentionInput>,
+) -> Result<Json<Value>> {
+    if !(50..=100_000).contains(&input.retention) {
+        return Err(bad("keep between 50 and 100000 events"));
+    }
+    let _guard = app.mutation.lock().await;
+    let mut next = app.config.lock().await.value.clone();
+    next.server.audit_retention = input.retention;
+    config::apply(
+        &app,
+        next,
+        "activity.retention_changed",
+        &input.retention.to_string(),
+    )
+    .await?;
+    Ok(Json(json!({"retention":input.retention})))
+}
+
 async fn overview(State(app): State<App>) -> Result<Json<Value>> {
     let providers: Vec<Value> = sqlx::query("SELECT id,name,driver,zone,created_at FROM providers ORDER BY name").fetch_all(&app.db).await?
         .iter().map(|r| json!({"id":r.get::<String,_>("id"),"name":r.get::<String,_>("name"),"driver":r.get::<String,_>("driver"),"zone":r.get::<String,_>("zone")})).collect();
     let clients: Vec<Value> = sqlx::query("SELECT id,name,scopes,revoked FROM clients ORDER BY created_at DESC").fetch_all(&app.db).await?
         .iter().map(|r| json!({"id":r.get::<String,_>("id"),"name":r.get::<String,_>("name"),"scopes":serde_json::from_str::<Value>(r.get("scopes")).unwrap_or(json!([])),"revoked":r.get::<bool,_>("revoked")})).collect();
-    let challenges: Vec<Value> = sqlx::query("SELECT c.id,c.fqdn,c.state,c.operation,c.attempts,c.expires_at,c.updated_at,c.last_error,cl.name AS client_name FROM challenges c JOIN clients cl ON cl.id=c.client_id ORDER BY c.updated_at DESC LIMIT 100").fetch_all(&app.db).await?
-        .iter().map(|r| json!({"id":r.get::<String,_>("id"),"fqdn":r.get::<String,_>("fqdn"),"state":r.get::<String,_>("state"),"operation":r.get::<String,_>("operation"),"attempts":r.get::<i64,_>("attempts"),"expires_at":r.get::<i64,_>("expires_at"),"updated_at":r.get::<i64,_>("updated_at"),"last_error":r.get::<Option<String>,_>("last_error"),"client_name":r.get::<String,_>("client_name")})).collect();
+    let challenges: Vec<Value> = sqlx::query("SELECT c.id,c.fqdn,c.state,c.operation,c.attempts,c.expires_at,c.updated_at,c.last_error,cl.name AS client_name,p.name AS provider_name,p.driver AS provider_driver FROM challenges c JOIN clients cl ON cl.id=c.client_id JOIN providers p ON p.id=c.provider_id ORDER BY c.updated_at DESC LIMIT 100").fetch_all(&app.db).await?
+        .iter().map(|r| json!({"id":r.get::<String,_>("id"),"fqdn":r.get::<String,_>("fqdn"),"state":r.get::<String,_>("state"),"operation":r.get::<String,_>("operation"),"attempts":r.get::<i64,_>("attempts"),"expires_at":r.get::<i64,_>("expires_at"),"updated_at":r.get::<i64,_>("updated_at"),"last_error":r.get::<Option<String>,_>("last_error"),"client_name":r.get::<String,_>("client_name"),"provider_name":r.get::<String,_>("provider_name"),"provider_driver":r.get::<String,_>("provider_driver")})).collect();
     let audit: Vec<Value> = sqlx::query("SELECT * FROM audit ORDER BY id DESC LIMIT 50").fetch_all(&app.db).await?
         .iter().map(|r| json!({"at":r.get::<i64,_>("at"),"actor":r.get::<String,_>("actor"),"action":r.get::<String,_>("action"),"target":r.get::<String,_>("target"),"outcome":r.get::<String,_>("outcome")})).collect();
     let active: i64 = sqlx::query_scalar(
@@ -297,6 +378,31 @@ async fn revoke_client(State(app): State<App>, Path(id): Path<String>) -> Result
     client.revoked = true;
     config::apply(&app, next, "client.revoked", &id).await?;
     Ok(Json(json!({"status":"revoked"})))
+}
+
+async fn delete_client(State(app): State<App>, Path(id): Path<String>) -> Result<Json<Value>> {
+    let _guard = app.mutation.lock().await;
+    let revoked: bool = sqlx::query_scalar("SELECT revoked FROM clients WHERE id=?")
+        .bind(&id)
+        .fetch_optional(&app.db)
+        .await?
+        .ok_or(Error(StatusCode::NOT_FOUND, "client not found"))?;
+    if !revoked {
+        return Err(conflict("revoke this client before deleting it"));
+    }
+    let outstanding: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM challenges WHERE client_id=? AND state!='cleaned'",
+    )
+    .bind(&id)
+    .fetch_one(&app.db)
+    .await?;
+    if outstanding > 0 {
+        return Err(conflict(
+            "clean up this client's outstanding DNS validations before deleting it",
+        ));
+    }
+    config::delete_client(&app, &id).await?;
+    Ok(Json(json!({"status":"deleted"})))
 }
 
 #[derive(Deserialize)]

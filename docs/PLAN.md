@@ -134,7 +134,9 @@ sequenceDiagram
 - Provider capabilities: multi-value TXT preservation, idempotent add/remove, minimum
   TTL, state requirements, timeout ambiguity, retry classification, and rate limits.
 - Test acme.sh end to end against Let's Encrypt staging or Pebble. Test lego HTTPREQ
-  RAW mode, Traefik, and Caddy separately before claiming client compatibility.
+  default mode, Nginx Proxy Manager's DnsMulti integration, Traefik, and Caddy separately
+  before claiming client compatibility. HTTPREQ_MODE=RAW sends a different payload and
+  is not supported by this gateway.
 - Add authoritative DNS propagation diagnostics and explicit, authorized CNAME delegation.
   The first version does not follow CNAMEs or verify delegation targets.
 - Recover crashes between remote mutation and local result commit. Operations are

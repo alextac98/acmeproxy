@@ -28,6 +28,7 @@ pub struct Server {
     pub dnsapi_home: String,
     pub challenge_ttl_seconds: i64,
     pub worker_timeout_seconds: u64,
+    pub audit_retention: i64,
 }
 impl Default for Server {
     fn default() -> Self {
@@ -36,6 +37,7 @@ impl Default for Server {
             dnsapi_home: "../.local/acme.sh".into(),
             challenge_ttl_seconds: 3600,
             worker_timeout_seconds: 30,
+            audit_retention: 1000,
         }
     }
 }
@@ -100,6 +102,10 @@ pub fn write(path: &Path, config: &Config) -> anyhow::Result<()> {
 }
 
 pub fn normalize(config: &mut Config, vault: &Vault, drivers: &[Driver]) -> anyhow::Result<()> {
+    anyhow::ensure!(
+        (50..=100_000).contains(&config.server.audit_retention),
+        "audit retention must be 50..100000 events"
+    );
     anyhow::ensure!(
         (60..=86400).contains(&config.server.challenge_ttl_seconds),
         "challenge TTL must be 60..86400 seconds"
@@ -182,6 +188,14 @@ pub fn normalize(config: &mut Config, vault: &Vault, drivers: &[Driver]) -> anyh
 }
 
 pub async fn sync(tx: &mut Transaction<'_, Sqlite>, config: &Config) -> anyhow::Result<()> {
+    sqlx::query("INSERT INTO metadata(key,value) VALUES('audit_retention',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value")
+        .bind(config.server.audit_retention).execute(&mut **tx).await?;
+    sqlx::query(
+        "DELETE FROM audit WHERE id <= (SELECT id FROM audit ORDER BY id DESC LIMIT 1 OFFSET ?)",
+    )
+    .bind(config.server.audit_retention)
+    .execute(&mut **tx)
+    .await?;
     for old in sqlx::query("SELECT * FROM providers")
         .fetch_all(&mut **tx)
         .await?
@@ -235,7 +249,24 @@ pub async fn sync(tx: &mut Transaction<'_, Sqlite>, config: &Config) -> anyhow::
 }
 
 // Caller holds app.mutation. Persist the authoritative file before committing its DB projection.
-pub async fn apply(app: &App, mut next: Config, action: &str, target: &str) -> anyhow::Result<()> {
+pub async fn apply(app: &App, next: Config, action: &str, target: &str) -> anyhow::Result<()> {
+    apply_inner(app, next, action, target, None).await
+}
+
+// Caller holds app.mutation, as with apply.
+pub async fn delete_client(app: &App, id: &str) -> anyhow::Result<()> {
+    let mut next = app.config.lock().await.value.clone();
+    next.clients.retain(|client| client.id != id);
+    apply_inner(app, next, "client.deleted", id, Some(id)).await
+}
+
+async fn apply_inner(
+    app: &App,
+    mut next: Config,
+    action: &str,
+    target: &str,
+    deleted_client: Option<&str>,
+) -> anyhow::Result<()> {
     normalize(&mut next, &app.vault, &app.drivers)?;
     let mut file = app.config.lock().await;
     anyhow::ensure!(
@@ -244,7 +275,27 @@ pub async fn apply(app: &App, mut next: Config, action: &str, target: &str) -> a
         "configuration changed on disk; restart before making UI changes"
     );
     let mut tx = app.db.begin().await?;
+    if let Some(id) = deleted_client {
+        let deletable: bool = sqlx::query_scalar(
+            "SELECT revoked AND NOT EXISTS(SELECT 1 FROM challenges WHERE client_id=? AND state!='cleaned') FROM clients WHERE id=?",
+        )
+        .bind(id).bind(id).fetch_one(&mut *tx).await?;
+        anyhow::ensure!(
+            deletable,
+            "client must be revoked and all DNS records cleaned up"
+        );
+    }
     sync(&mut tx, &next).await?;
+    if let Some(id) = deleted_client {
+        sqlx::query("DELETE FROM challenges WHERE client_id=?")
+            .bind(id)
+            .execute(&mut *tx)
+            .await?;
+        sqlx::query("DELETE FROM clients WHERE id=?")
+            .bind(id)
+            .execute(&mut *tx)
+            .await?;
+    }
     sqlx::query(
         "INSERT INTO audit(at,actor,action,target,outcome) VALUES(?,'admin',?,?,'success')",
     )

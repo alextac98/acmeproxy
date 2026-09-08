@@ -54,6 +54,7 @@ listen = "127.0.0.1:8080"
 dnsapi_home = "../.local/acme.sh" # Relative to the configuration directory, or absolute
 challenge_ttl_seconds = 3600
 worker_timeout_seconds = 30
+audit_retention = 1000 # Keep the newest N activity events (50–100000)
 ```
 
 The UI writes the same file using atomic replacement. Manual edits take effect on
@@ -91,6 +92,19 @@ Client IDs are Basic-auth usernames. Removing a client from the file or setting
 ID. An exact scope permits only that challenge name; `*.apps.example.com` permits
 descendants of any depth, excluding `apps.example.com` itself. DNS-01 cannot distinguish
 hostname validation from wildcard validation at the same challenge name.
+
+## Activity log
+
+The Activity page at `/activity` shows persisted audit events with time, action,
+actor, target, and outcome. Search by action, actor, target, or outcome and browse 50 events per
+page. Older pages stay in place while new events arrive; use Latest to return
+to the newest events.
+
+Set **Keep last N events** in the viewer or `server.audit_retention` in
+`config.toml` (default 1000, range 50–100000). UI changes are saved immediately;
+file edits apply on restart. Older events are automatically deleted as new ones
+arrive, and reducing the limit prunes existing history. The UI asks for confirmation
+before reducing it. This is the application audit log, not raw server stdout.
 
 ## Client API
 
@@ -132,6 +146,37 @@ Only `account.conf` and `domain.conf` adapter state is preserved. Adapters needi
 files, custom tools, or nonstandard environment settings may need more integration.
 No CNAME delegation is implemented. The client protocol matches acme.sh; actual ACME
 issuance and Caddy/Traefik compatibility have not yet been tested.
+
+## Nginx Proxy Manager
+
+Nginx Proxy Manager v2.15.1 includes the **DnsMulti** provider, backed by
+[`certbot-dns-multi`](https://github.com/alexzorin/certbot-dns-multi). Its lego
+[`httpreq`](https://go-acme.github.io/lego/dns/httpreq/) backend sends the same
+`/present` and `/cleanup` requests as this gateway in its default mode.
+This configuration is verified against upstream definitions, but has not yet been
+tested end to end with Nginx Proxy Manager.
+
+Create a gateway client scoped to the certificate's domain(s). In Nginx Proxy Manager,
+add a Let's Encrypt certificate, enable DNS Challenge, select **DnsMulti**, and enter:
+
+```ini
+dns_multi_provider = httpreq
+HTTPREQ_ENDPOINT = http://YOUR-PROXY-HOST:8080
+HTTPREQ_USERNAME = YOUR-PROXY-CLIENT-ID
+HTTPREQ_PASSWORD = YOUR-PROXY-CLIENT-TOKEN
+HTTPREQ_HTTP_TIMEOUT = 90
+```
+
+Use port 8081 for the development Compose host mapping. The endpoint must be reachable
+from the Nginx Proxy Manager container; `localhost` would refer to that container.
+Leave `HTTPREQ_MODE` unset. RAW mode sends `domain`, `token`, and `keyAuth`, which this
+gateway does not accept. Start with 60 seconds in NPM's Propagation Seconds field.
+After issuance, select the certificate in the proxy host's SSL settings. NPM remains
+responsible for certificate issuance and renewals; it holds only a scoped gateway
+token, while Cloudflare credentials stay in ACME Proxy.
+
+The ACME-DNS dropdown option uses a different protocol and is not compatible with this
+gateway. Selecting Cloudflare would connect NPM directly to Cloudflare instead.
 
 ## Development
 

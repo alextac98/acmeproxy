@@ -202,6 +202,10 @@ async fn compatible_protocol_owns_exact_values_and_keeps_secrets_private() {
         StatusCode::OK
     );
     let (_, overview) = h.admin("GET", "/api/admin/overview", json!(null)).await;
+    for challenge in overview["challenges"].as_array().unwrap() {
+        assert_eq!(challenge["provider_name"], "Example DNS");
+        assert_eq!(challenge["provider_driver"], "dns_test");
+    }
     let public = overview.to_string();
     assert!(!public.contains("fixture-secret"));
     assert!(!public.contains(&client.1));
@@ -542,5 +546,270 @@ fn plaintext_file_import_is_encrypted_and_rejects_unlisted_environment_keys() {
             &BTreeMap::from([("BASH_ENV".into(), "/tmp/evil".into())])
         )
         .is_err()
+    );
+}
+
+#[tokio::test]
+async fn permanent_client_deletion_requires_revocation_and_completed_cleanup() {
+    let h = Harness::new().await;
+    let provider = h.provider("ok").await;
+    let client = h.client("app.example.com").await;
+    let other = h.client("other.example.com").await;
+    let path = format!("/api/admin/clients/{}/permanent", client.0);
+    assert_eq!(
+        h.request("DELETE", &path, None, json!(null)).await.0,
+        StatusCode::UNAUTHORIZED
+    );
+    assert_eq!(
+        h.admin("DELETE", &path, json!(null)).await.0,
+        StatusCode::CONFLICT
+    );
+    for (id, owner) in [("delete-history", &client.0), ("keep-history", &other.0)] {
+        sqlx::query("INSERT INTO challenges(id,client_id,provider_id,credentials_snapshot,fqdn,value,state,operation,next_attempt,expires_at,created_at,updated_at) VALUES(?,?,?,X'00','_acme-challenge.app.example.com',?,'cleaned','cleanup',0,0,0,0)")
+            .bind(id).bind(owner).bind(&provider).bind(id).execute(&h.app.db).await.unwrap();
+    }
+    assert_eq!(
+        h.admin(
+            "DELETE",
+            &format!("/api/admin/clients/{}", client.0),
+            json!(null)
+        )
+        .await
+        .0,
+        StatusCode::OK
+    );
+    for state in ["active", "present_pending", "cleanup_pending", "failed"] {
+        sqlx::query("UPDATE challenges SET state=? WHERE id='delete-history'")
+            .bind(state)
+            .execute(&h.app.db)
+            .await
+            .unwrap();
+        let (status, body) = h.admin("DELETE", &path, json!(null)).await;
+        assert_eq!(status, StatusCode::CONFLICT, "{body}");
+        assert!(body["error"].as_str().unwrap().contains("clean up"));
+    }
+    sqlx::query("UPDATE challenges SET state='cleaned' WHERE id='delete-history'")
+        .execute(&h.app.db)
+        .await
+        .unwrap();
+    // Conflicting edits on disk must not partially erase the client or history.
+    let config_path = h.directory.path().join("config.toml");
+    let original = std::fs::read_to_string(&config_path).unwrap();
+    std::fs::write(
+        &config_path,
+        original.replace("127.0.0.1:8080", "127.0.0.1:8081"),
+    )
+    .unwrap();
+    assert_ne!(
+        h.admin("DELETE", &path, json!(null)).await.0,
+        StatusCode::OK
+    );
+    assert_eq!(
+        sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM challenges WHERE id='delete-history'")
+            .fetch_one(&h.app.db)
+            .await
+            .unwrap(),
+        1
+    );
+    std::fs::write(&config_path, original).unwrap();
+    assert_eq!(
+        h.admin("DELETE", &path, json!(null)).await.0,
+        StatusCode::OK
+    );
+    let saved = config::ConfigFile::load(config_path).unwrap();
+    assert!(!saved.value.clients.iter().any(|c| c.id == client.0));
+    let mut tx = h.app.db.begin().await.unwrap();
+    config::sync(&mut tx, &saved.value).await.unwrap();
+    tx.commit().await.unwrap();
+    let (_, overview) = h.admin("GET", "/api/admin/overview", json!(null)).await;
+    assert_eq!(overview["clients"].as_array().unwrap().len(), 1);
+    assert_eq!(overview["clients"][0]["id"], other.0);
+    assert_eq!(overview["challenges"].as_array().unwrap().len(), 1);
+    assert_eq!(overview["challenges"][0]["id"], "keep-history");
+    assert!(
+        overview["audit"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|a| a["action"] == "client.deleted")
+    );
+    assert_eq!(
+        h.admin("DELETE", &path, json!(null)).await.0,
+        StatusCode::NOT_FOUND
+    );
+    assert_eq!(
+        h.request(
+            "POST",
+            "/present",
+            Harness::basic(&client),
+            json!({"fqdn":"_acme-challenge.app.example.com","value":security::random_secret()})
+        )
+        .await
+        .0,
+        StatusCode::UNAUTHORIZED
+    );
+}
+
+#[tokio::test]
+async fn activity_retention_pagination_and_search_are_persistent_and_admin_only() {
+    let h = Harness::new().await;
+    assert_eq!(
+        h.request("GET", "/api/admin/activity", None, json!(null))
+            .await
+            .0,
+        StatusCode::UNAUTHORIZED
+    );
+    assert_eq!(
+        h.request(
+            "PUT",
+            "/api/admin/activity/retention",
+            None,
+            json!({"retention":75})
+        )
+        .await
+        .0,
+        StatusCode::UNAUTHORIZED
+    );
+    assert_eq!(
+        h.admin(
+            "PUT",
+            "/api/admin/activity/retention",
+            json!({"retention":75})
+        )
+        .await
+        .0,
+        StatusCode::OK
+    );
+    for index in 0..130 {
+        store::audit(
+            &h.app.db,
+            "worker",
+            "dns.published",
+            &format!("event-{index}"),
+            "success",
+        )
+        .await
+        .unwrap();
+    }
+    let (_, first) = h.admin("GET", "/api/admin/activity", json!(null)).await;
+    assert_eq!(first["retention"], 75);
+    assert_eq!(first["stored"], 75);
+    assert_eq!(first["events"].as_array().unwrap().len(), 50);
+    assert_eq!(first["events"][0]["target"], "event-129");
+    let cursor = first["next_before"].as_i64().unwrap();
+    let (_, older) = h
+        .admin(
+            "GET",
+            &format!("/api/admin/activity?before={cursor}"),
+            json!(null),
+        )
+        .await;
+    assert_eq!(older["events"].as_array().unwrap().len(), 25);
+    assert!(older["next_before"].is_null());
+    assert_eq!(older["events"][24]["target"], "event-55");
+    store::audit(&h.app.db, "worker", "dns.cleaned", "new-event", "success")
+        .await
+        .unwrap();
+    let (_, stable) = h
+        .admin(
+            "GET",
+            &format!("/api/admin/activity?before={cursor}"),
+            json!(null),
+        )
+        .await;
+    assert_eq!(stable["events"][0]["id"], older["events"][0]["id"]);
+    assert!(
+        stable["events"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|event| event["id"].as_i64().unwrap() < cursor)
+    );
+    let (_, search) = h
+        .admin("GET", "/api/admin/activity?search=EVENT-129", json!(null))
+        .await;
+    assert_eq!(search["events"].as_array().unwrap().len(), 1);
+    assert_eq!(search["events"][0]["target"], "event-129");
+    let (_, empty) = h
+        .admin("GET", "/api/admin/activity?search=missing", json!(null))
+        .await;
+    assert_eq!(empty["events"], json!([]));
+    for retention in [0, 49, 100001] {
+        assert_eq!(
+            h.admin(
+                "PUT",
+                "/api/admin/activity/retention",
+                json!({"retention":retention})
+            )
+            .await
+            .0,
+            StatusCode::BAD_REQUEST
+        );
+    }
+    assert_eq!(
+        h.admin("GET", "/api/admin/activity?before=-1", json!(null))
+            .await
+            .0,
+        StatusCode::BAD_REQUEST
+    );
+    assert_eq!(
+        h.admin(
+            "GET",
+            &format!("/api/admin/activity?search={}", "x".repeat(201)),
+            json!(null)
+        )
+        .await
+        .0,
+        StatusCode::BAD_REQUEST
+    );
+    // A refused config write must not prune the existing log.
+    let config_path = h.directory.path().join("config.toml");
+    let original = std::fs::read_to_string(&config_path).unwrap();
+    std::fs::write(
+        &config_path,
+        original.replace("127.0.0.1:8080", "127.0.0.1:8081"),
+    )
+    .unwrap();
+    assert_ne!(
+        h.admin(
+            "PUT",
+            "/api/admin/activity/retention",
+            json!({"retention":50})
+        )
+        .await
+        .0,
+        StatusCode::OK
+    );
+    let (_, unchanged) = h.admin("GET", "/api/admin/activity", json!(null)).await;
+    assert_eq!(unchanged["stored"], 75);
+    assert_eq!(unchanged["retention"], 75);
+    std::fs::write(&config_path, original).unwrap();
+    assert_eq!(
+        h.admin(
+            "PUT",
+            "/api/admin/activity/retention",
+            json!({"retention":50})
+        )
+        .await
+        .0,
+        StatusCode::OK
+    );
+    let saved = config::ConfigFile::load(config_path).unwrap();
+    assert_eq!(saved.value.server.audit_retention, 50);
+    let mut tx = h.app.db.begin().await.unwrap();
+    config::sync(&mut tx, &saved.value).await.unwrap();
+    tx.commit().await.unwrap();
+    let (_, reduced) = h.admin("GET", "/api/admin/activity", json!(null)).await;
+    assert_eq!(reduced["stored"], 50);
+    assert_eq!(reduced["events"][0]["action"], "activity.retention_changed");
+    assert!(reduced["next_before"].is_null());
+    // Direct worker-style inserts are bounded by the same database trigger.
+    sqlx::query("INSERT INTO audit(at,actor,action,target,outcome) VALUES(0,'worker','dns.cleaned','record','success')").execute(&h.app.db).await.unwrap();
+    assert_eq!(
+        sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM audit")
+            .fetch_one(&h.app.db)
+            .await
+            .unwrap(),
+        50
     );
 }

@@ -12,12 +12,7 @@
     <div id="login" class="login-shell">
       <form id="login-form" class="login-card">
         <div class="brand"><span class="brand-mark">A</span> ACME Proxy</div>
-        <p class="eyebrow">YOUR DNS CHALLENGE GATEWAY</p>
         <h1>One place for DNS access.</h1>
-        <p class="muted">
-          Manage provider credentials and give each service access to the
-          domains it needs.
-        </p>
         <label for="admin-token">Admin token</label
         ><input
           id="admin-token"
@@ -38,104 +33,111 @@
     </div>
     <div id="workspace" class="workspace" hidden>
       <aside>
-        <a href="#providers" class="brand"
+        <a href="/providers" class="brand"
           ><span class="brand-mark">A</span> ACME Proxy</a
         >
-        <p class="nav-label">ADMINISTRATION</p>
         <nav aria-label="Main navigation">
-          <button data-tab="providers" class="selected">
-            DNS providers <span>01</span></button
-          ><button data-tab="clients">Clients <span>02</span></button
-          ><button data-tab="challenges">Challenges <span>03</span></button
-          ><button data-tab="activity">Activity <span>04</span></button>
+          <a href="/providers" data-tab="providers" class="selected">DNS providers</a>
+          <a href="/clients" data-tab="clients">Clients</a>
+          <a href="/validations" data-tab="challenges">DNS validations</a>
+          <a href="/activity" data-tab="activity">Activity</a>
         </nav>
         <div class="aside-bottom">
-          <span class="dot"></span> Self-hosted gateway
-          <p>Configuration stored locally</p>
           <button id="logout" class="subtle">Sign out ↗</button>
         </div>
       </aside>
       <main>
-        <header class="topbar">
-          <span
-            >Workspace <span class="slash">/</span>
-            <strong id="breadcrumb">DNS providers</strong></span
-          ><span class="preview-label">Development preview</span>
-        </header>
         <div class="content">
           <div id="notice" role="status" hidden></div>
           <div class="page-heading">
             <div>
-              <p class="eyebrow">ACME / DNS-01</p>
               <h1 id="page-title">DNS providers</h1>
-              <p id="page-description" class="muted">
-                Keep DNS credentials in one place. Route challenges by domain.
-              </p>
             </div>
             <button id="add-button" class="primary">+ Add provider</button>
           </div>
           <section class="stats" aria-label="Gateway summary">
             <div>
               <span>DNS providers</span><strong id="provider-count">0</strong
-              ><small>Configured connections</small>
+              >
             </div>
             <div>
               <span>Authorized clients</span><strong id="client-count">0</strong
-              ><small>Active credentials</small>
+              >
             </div>
             <div>
               <span>Open challenges</span><strong id="challenge-count">0</strong
-              ><small id="challenge-note">Waiting or published</small>
+              ><small id="challenge-note" hidden></small>
             </div>
           </section>
           <section id="providers-panel" class="panel">
             <div class="panel-heading">
               <h2>Provider connections</h2>
-              <span class="badge">Encrypted credentials</span>
             </div>
             <div id="provider-list"></div>
-            <div class="panel-footer">
-              The most specific matching zone handles each new challenge.
-              Provider adapters require live verification before production use.
-            </div>
           </section>
           <section id="clients-panel" class="panel" hidden>
             <div class="panel-heading">
               <h2>Client access</h2>
-              <span class="badge">Domain-scoped</span>
             </div>
-            <p class="panel-note">
-              DNS-01 access to a hostname also permits wildcard validation at
-              that hostname. Keep each client’s scope as narrow as possible.
-            </p>
             <div id="client-list"></div>
+            <details id="revoked-clients" hidden>
+              <summary>Revoked clients (<span id="revoked-client-count">0</span>)</summary>
+              <div id="revoked-client-list"></div>
+            </details>
           </section>
           <section id="challenges-panel" class="panel" hidden>
             <div class="panel-heading">
-              <h2>Recent challenges</h2>
-              <button id="refresh" class="subtle">Refresh ↻</button>
+              <h2>Domains</h2>
+              <div class="refresh-actions">
+                <span id="refresh-status" role="status" aria-atomic="true"></span>
+                <button id="refresh" class="subtle">Refresh ↻</button>
+              </div>
             </div>
             <p class="panel-note">
-              Published means the DNS adapter succeeded. Your ACME client checks
-              DNS propagation. Showing the latest 100 challenges.
+              Latest 100 DNS validations, grouped by domain.
             </p>
             <div id="challenge-list"></div>
           </section>
           <section id="activity-panel" class="panel" hidden>
             <div class="panel-heading">
-              <h2>Recent activity</h2>
-              <span class="badge">Latest 50 events</span>
+              <h2>Activity log</h2>
+              <div class="refresh-actions">
+                <span id="activity-status" role="status" aria-atomic="true"></span>
+                <button id="activity-refresh" class="subtle">Refresh ↻</button>
+              </div>
             </div>
-            <div id="audit-list"></div>
+            <div class="activity-toolbar">
+              <form id="activity-search-form">
+                <label for="activity-search">Search events</label>
+                <div class="activity-control">
+                  <input id="activity-search" type="search" maxlength="200" placeholder="Action, actor, target, or outcome" />
+                  <button class="secondary" type="submit">Search</button>
+                </div>
+              </form>
+              <form id="activity-retention-form">
+                <label for="activity-retention">Keep last N events</label>
+                <div class="activity-control">
+                  <input id="activity-retention" type="number" min="50" max="100000" step="1" required value="1000" />
+                  <button class="secondary" type="submit" disabled>Save limit</button>
+                </div>
+              </form>
+            </div>
+            <p id="activity-empty" class="empty" hidden>No events yet</p>
+            <div id="activity-table" class="activity-table" role="region" aria-label="Activity events" tabindex="0">
+              <table>
+                <thead><tr><th scope="col">Time</th><th scope="col">Action</th><th scope="col">Actor</th><th scope="col">Target</th><th scope="col">Outcome</th></tr></thead>
+                <tbody id="audit-list"></tbody>
+              </table>
+            </div>
+            <div class="activity-pagination">
+              <span id="activity-count" role="status"></span>
+              <div class="row-actions">
+                <button id="activity-latest" class="subtle" disabled>Latest</button>
+                <button id="activity-newer" class="subtle" disabled>← Newer</button>
+                <button id="activity-older" class="subtle" disabled>Older →</button>
+              </div>
+            </div>
           </section>
-          <div class="config-note">
-            <span class="config-symbol" aria-hidden="true">{ }</span>
-            <p>
-              <strong>Your configuration stays yours.</strong><br />Changes here
-              are saved to <code>config.toml</code>. You can also edit the file
-              and restart the server.
-            </p>
-          </div>
         </div>
       </main>
     </div>
@@ -147,9 +149,6 @@
             ×
           </button>
         </div>
-        <p class="muted">
-          Connect the DNS account that hosts your challenge records.
-        </p>
         <input id="provider-id" type="hidden" /><label for="provider-name"
           >Connection name</label
         ><input
@@ -175,11 +174,9 @@
           >
         </div>
         <p class="hint">
-          Fill in the credential option that applies to your account. Some
-          providers offer multiple authentication methods. Saved values are
-          never displayed. Leave all fields blank to keep existing credentials.
-          Existing challenges retain their original credentials; Retry uses the
-          current credentials.
+          Use the fields for your authentication method. Saved values are hidden;
+          leave all fields blank to keep them. Existing challenges keep their
+          original credentials; Retry uses the current ones.
         </p>
         <div id="credential-fields"></div>
         <p id="provider-error" class="error" role="alert"></p>
