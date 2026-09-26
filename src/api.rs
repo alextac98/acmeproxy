@@ -17,7 +17,7 @@ use sqlx::Row;
 use std::{collections::BTreeMap, sync::atomic::Ordering, time::Duration};
 
 #[derive(Debug)]
-pub struct Error(StatusCode, &'static str);
+pub struct Error(pub(crate) StatusCode, pub(crate) &'static str);
 impl IntoResponse for Error {
     fn into_response(self) -> Response {
         (self.0, Json(json!({"error":self.1}))).into_response()
@@ -39,11 +39,11 @@ impl From<anyhow::Error> for Error {
         )
     }
 }
-type Result<T> = std::result::Result<T, Error>;
-fn bad(message: &'static str) -> Error {
+pub(crate) type Result<T> = std::result::Result<T, Error>;
+pub(crate) fn bad(message: &'static str) -> Error {
     Error(StatusCode::BAD_REQUEST, message)
 }
-fn conflict(message: &'static str) -> Error {
+pub(crate) fn conflict(message: &'static str) -> Error {
     Error(StatusCode::CONFLICT, message)
 }
 fn unauthorized() -> Error {
@@ -53,6 +53,24 @@ fn unauthorized() -> Error {
 pub fn router(app: App) -> Router {
     let admin = Router::new()
         .route("/overview", get(overview))
+        .route(
+            "/acme/settings",
+            get(crate::acme::get_settings).put(crate::acme::put_settings),
+        )
+        .route("/acme/accounts/{id}", put(crate::acme::approve_account))
+        .route(
+            "/certificates",
+            get(crate::certificates::list).post(crate::certificates::create),
+        )
+        .route(
+            "/certificates/{id}",
+            put(crate::certificates::settings).delete(crate::certificates::remove),
+        )
+        .route("/certificates/{id}/retry", post(crate::certificates::retry))
+        .route(
+            "/certificates/{id}/{file}",
+            get(crate::certificates::download),
+        )
         .route("/activity", get(activity))
         .route("/activity/retention", put(activity_retention))
         .route("/providers", post(create_provider))
@@ -70,9 +88,11 @@ pub fn router(app: App) -> Router {
         .route("/", get(admin_page))
         .route("/providers", get(admin_page))
         .route("/clients", get(admin_page))
+        .route("/certificates", get(admin_page))
         .route("/validations", get(admin_page))
         .route("/activity", get(admin_page))
         .route("/about", get(admin_page))
+        .route("/settings", get(admin_page))
         .route(
             "/app.js",
             get(|| async {
@@ -113,6 +133,7 @@ pub fn router(app: App) -> Router {
         .route("/present", post(present))
         .route("/cleanup", post(cleanup))
         .nest("/api/admin", admin)
+        .nest("/acme", crate::acme::router())
         .layer(DefaultBodyLimit::max(32 * 1024))
         .layer(tower::limit::ConcurrencyLimitLayer::new(64))
         .layer(middleware::from_fn_with_state(
@@ -185,11 +206,13 @@ async fn client_auth(app: &App, headers: &HeaderMap) -> Result<(String, Vec<Stri
     if token.len() > 256 {
         return Err(unauthorized());
     }
-    let row = sqlx::query("SELECT id, scopes FROM clients WHERE token_hash=? AND revoked=0")
-        .bind(security::hash(&token))
-        .fetch_optional(&app.db)
-        .await?
-        .ok_or_else(unauthorized)?;
+    let row = sqlx::query(
+        "SELECT id, scopes FROM clients WHERE token_hash=? AND revoked=0 AND managed=0",
+    )
+    .bind(security::hash(&token))
+    .fetch_optional(&app.db)
+    .await?
+    .ok_or_else(unauthorized)?;
     let id: String = row.get("id");
     if username.is_some_and(|u| u != id) {
         return Err(unauthorized());
@@ -283,7 +306,7 @@ async fn activity_retention(
 async fn overview(State(app): State<App>) -> Result<Json<Value>> {
     let providers: Vec<Value> = sqlx::query("SELECT id,name,driver,zone,created_at FROM providers ORDER BY name").fetch_all(&app.db).await?
         .iter().map(|r| json!({"id":r.get::<String,_>("id"),"name":r.get::<String,_>("name"),"driver":r.get::<String,_>("driver"),"zone":r.get::<String,_>("zone")})).collect();
-    let clients: Vec<Value> = sqlx::query("SELECT id,name,scopes,revoked FROM clients ORDER BY created_at DESC").fetch_all(&app.db).await?
+    let clients: Vec<Value> = sqlx::query("SELECT id,name,scopes,revoked FROM clients WHERE managed=0 ORDER BY created_at DESC").fetch_all(&app.db).await?
         .iter().map(|r| json!({"id":r.get::<String,_>("id"),"name":r.get::<String,_>("name"),"scopes":serde_json::from_str::<Value>(r.get("scopes")).unwrap_or(json!([])),"revoked":r.get::<bool,_>("revoked")})).collect();
     let challenges: Vec<Value> = sqlx::query("SELECT c.id,c.fqdn,c.state,c.operation,c.attempts,c.expires_at,c.updated_at,c.last_error,cl.name AS client_name,p.name AS provider_name,p.driver AS provider_driver FROM challenges c JOIN clients cl ON cl.id=c.client_id JOIN providers p ON p.id=c.provider_id ORDER BY c.updated_at DESC LIMIT 100").fetch_all(&app.db).await?
         .iter().map(|r| json!({"id":r.get::<String,_>("id"),"fqdn":r.get::<String,_>("fqdn"),"state":r.get::<String,_>("state"),"operation":r.get::<String,_>("operation"),"attempts":r.get::<i64,_>("attempts"),"expires_at":r.get::<i64,_>("expires_at"),"updated_at":r.get::<i64,_>("updated_at"),"last_error":r.get::<Option<String>,_>("last_error"),"client_name":r.get::<String,_>("client_name"),"provider_name":r.get::<String,_>("provider_name"),"provider_driver":r.get::<String,_>("provider_driver")})).collect();
@@ -402,7 +425,7 @@ async fn revoke_client(State(app): State<App>, Path(id): Path<String>) -> Result
 
 async fn delete_client(State(app): State<App>, Path(id): Path<String>) -> Result<Json<Value>> {
     let _guard = app.mutation.lock().await;
-    let revoked: bool = sqlx::query_scalar("SELECT revoked FROM clients WHERE id=?")
+    let revoked: bool = sqlx::query_scalar("SELECT revoked FROM clients WHERE id=? AND managed=0")
         .bind(&id)
         .fetch_optional(&app.db)
         .await?

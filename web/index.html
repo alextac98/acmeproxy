@@ -40,9 +40,11 @@
         >
         <nav aria-label="Main navigation">
           <a href="/providers" data-tab="providers" class="selected">DNS providers</a>
+          <a href="/certificates" data-tab="certificates">Certificates</a>
           <a href="/clients" data-tab="clients">Clients</a>
           <a href="/validations" data-tab="challenges">DNS validations</a>
           <a href="/activity" data-tab="activity">Activity</a>
+          <a href="/settings" data-tab="settings">Settings</a>
         </nav>
         <div class="aside-bottom">
           <a id="app-version" class="app-version" target="_blank" rel="noreferrer">Version unavailable</a>
@@ -82,12 +84,45 @@
               ><small id="challenge-note" hidden></small>
             </div>
           </section>
+          <section id="settings-panel" class="settings-page" aria-label="ACME settings" hidden>
+            <div class="panel settings-card">
+              <h2>ACME endpoint</h2>
+              <p class="muted">Let Certbot and other ACME clients request certificates directly. Clients keep their private keys; this server handles Let's Encrypt DNS validation using your provider connections.</p>
+              <form id="acme-settings-form">
+                <label for="acme-mode">Access mode</label>
+                <select id="acme-mode"><option value="disabled">Disabled</option><option value="trusted_network">Trusted network — no account approval</option><option value="approved_accounts">Approved ACME accounts</option></select>
+                <p id="acme-mode-help" class="hint"></p>
+                <label for="acme-base-url">Server URL seen by clients</label>
+                <input id="acme-base-url" type="url" placeholder="http://10.13.1.240:8080" />
+                <label for="acme-networks">Allowed client networks</label>
+                <textarea id="acme-networks" rows="4" placeholder="10.13.1.0/24"></textarea>
+                <p class="hint">One network CIDR per line. Applies to both access modes. Behind a reverse proxy, also restrict clients at the proxy, because this server sees the proxy's address.</p>
+                <label for="acme-domains">Allowed certificate domains (optional)</label>
+                <textarea id="acme-domains" rows="3" placeholder="example.com&#10;*.example.com"></textarea>
+                <p class="hint">Leave empty to allow all domains covered by your DNS connections. An exact name allows that certificate only; a wildcard scope allows descendants and their wildcard certificates, excluding the apex.</p>
+                <label for="acme-environment">Upstream certificate authority</label>
+                <select id="acme-environment"><option value="staging">Let's Encrypt staging — test certificates</option><option value="production">Let's Encrypt production — trusted certificates</option></select>
+                <label class="checkbox-label"><input id="acme-terms" type="checkbox" /> I accept the <a href="https://letsencrypt.org/repository/" target="_blank" rel="noreferrer">Let's Encrypt subscriber agreement ↗</a> for certificates requested through this endpoint.</label>
+                <p id="acme-settings-error" class="error" role="alert"></p>
+                <div class="dialog-actions"><button type="submit" class="primary">Save ACME settings</button></div>
+              </form>
+            </div>
+            <div class="panel settings-card">
+              <h2>Connect a client</h2>
+              <p id="acme-connection-status" class="muted"></p>
+              <label for="acme-directory-url">ACME directory URL</label><input id="acme-directory-url" readonly />
+              <label for="acme-command">Certbot example</label><textarea id="acme-command" readonly rows="5"></textarea>
+              <p class="hint">Use your domain and email address. Keep the client's renewal timer enabled; it uses this endpoint again for renewals. No DNS credentials, gateway token, or manual TXT records are needed on the client.</p>
+            </div>
+            <div class="panel"><div class="panel-heading"><h2>ACME accounts</h2><button id="acme-settings-refresh" class="subtle" type="button">Refresh ↻</button></div><div id="acme-account-list"></div></div>
+            <div class="panel"><div class="panel-heading"><h2>Recent ACME orders</h2></div><div id="acme-order-list"></div></div>
+          </section>
           <section id="about-panel" class="about-page" aria-label="About ACME Proxy" hidden>
             <div class="panel about-intro">
               <img class="brand-logo" src="/brand/logo.png" alt="ACME Proxy" width="2172" height="724" />
               <h2>One place for DNS access.</h2>
               <p>ACME Proxy connects your certificate tools to your DNS providers. Keep provider credentials in one place and give each service access to just the domains it needs.</p>
-              <p class="muted">Self-hosted, open source, and built to keep your certificates and private keys with your services.</p>
+              <p class="muted">Self-hosted and open source. Issue and renew certificates here, or let your services manage their own certificates through the DNS gateway.</p>
               <div class="about-links">
                 <a class="primary" href="https://github.com/alextac98/acmeproxy" target="_blank" rel="noreferrer">View source on GitHub ↗</a>
                 <a class="secondary report-problem" href="https://github.com/alextac98/acmeproxy/issues/new/choose" target="_blank" rel="noreferrer">Report a problem ↗</a>
@@ -113,6 +148,11 @@
               <h2>Provider connections</h2>
             </div>
             <div id="provider-list"></div>
+          </section>
+          <section id="certificates-panel" class="panel" hidden>
+            <div class="panel-heading"><h2>Managed certificates</h2></div>
+            <p class="panel-note">Request a Let's Encrypt certificate using your configured DNS connections. Validation, cleanup, and renewal run automatically. Download renewed certificates here or retrieve them through the API.</p>
+            <div id="certificate-list"></div>
           </section>
           <section id="clients-panel" class="panel" hidden>
             <div class="panel-heading">
@@ -223,6 +263,20 @@
           <button type="button" class="secondary close">Cancel</button
           ><button type="submit" class="primary">Save provider</button>
         </div>
+      </form>
+    </dialog>
+    <dialog id="certificate-dialog">
+      <form id="certificate-form">
+        <div class="dialog-heading"><h2>Request certificate</h2><button type="button" class="close" aria-label="Close dialog">×</button></div>
+        <label for="certificate-domains">Domains</label>
+        <textarea id="certificate-domains" required rows="4" placeholder="example.com&#10;*.example.com"></textarea>
+        <p class="hint">One domain per line, up to 20. Each domain must be covered by an existing DNS provider connection. Wildcards are supported.</p>
+        <label for="certificate-environment">Certificate type</label>
+        <select id="certificate-environment"><option value="production">Trusted certificate — Let's Encrypt</option><option value="staging">Test certificate — Let's Encrypt staging (not browser trusted)</option></select>
+        <label class="checkbox-label"><input id="certificate-terms" type="checkbox" required /> I agree to the <a href="https://letsencrypt.org/repository/" target="_blank" rel="noreferrer">Let's Encrypt subscriber agreement ↗</a>.</label>
+        <p class="hint">Renewal is automatic while this service runs. Installing renewed certificates on your services requires downloading or retrieving them through the API.</p>
+        <p id="certificate-error" class="error" role="alert"></p>
+        <div class="dialog-actions"><button type="button" class="secondary close">Cancel</button><button type="submit" class="primary">Request certificate</button></div>
       </form>
     </dialog>
     <dialog id="client-dialog">

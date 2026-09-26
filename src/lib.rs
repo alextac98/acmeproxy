@@ -1,5 +1,7 @@
+pub mod acme;
 pub mod api;
 pub mod build_info;
+pub mod certificates;
 pub mod config;
 pub mod provider;
 pub mod security;

@@ -2,10 +2,12 @@
 
 ## Product boundary
 
-A self-hosted DNS-01 challenge gateway. Services keep their ACME accounts, certificate
-private keys, renewal schedules, and certificates. The gateway holds DNS credentials
-and creates/removes only `_acme-challenge` TXT values for authorized client domains.
-It is not an ACME CA or an ACME protocol reverse proxy.
+A self-hosted DNS-01 gateway and internal ACME endpoint, with optional managed certificates.
+External gateway clients keep their ACME accounts, keys, renewals, and certificates.
+Managed requests instead let the server own that lifecycle: an administrator requests
+domains, and the issuer uses existing operator-configured DNS providers automatically.
+The gateway creates/removes only `_acme-challenge` TXT values. The internal ACME endpoint forwards client CSRs to Let's Encrypt after operator-policy
+authorization and upstream DNS-01 validation. It does not sign certificates itself.
 
 **Configuration is the source of truth.** A single directory contains `config.toml`,
 keys, and durable runtime state. An administrator can configure the service entirely
@@ -63,6 +65,46 @@ sequenceDiagram
     Worker->>DNS: Delete matching value
     Proxy->>State: Mark cleaned
 ```
+
+## Internal ACME endpoint
+
+See [ACME endpoint design, setup and verification](ACME.md). This is the primary flow
+for clients such as Certbot: the client owns its account key, certificate key, installation
+and renewal timer. The gateway presents an ACME directory and automatically authorizes
+covered names according to a trusted-network or approved-account policy, then submits
+the client's verified CSR to Let's Encrypt using the same durable DNS worker.
+
+The endpoint is disabled by default. Settings and account approvals are persisted in
+TOML; registered account public keys, single-use nonces, orders, CSRs and issued chains
+are runtime state in SQLite. There is no client certificate private key on this path.
+An order pins its upstream staging/production choice. The existing serial issuance
+worker processes both managed certificates and downstream ACME jobs, so upstream account
+creation and provider mutations preserve the single-process recovery assumptions.
+
+## Managed certificate lifecycle
+
+- `instant-acme` handles ACME with Let's Encrypt production/staging over verified HTTPS;
+  `rcgen` generates ECDSA P-256 keys and CSRs. No CA URL is accepted from requesters.
+- A separate, serial issuer queues DNS mutations into the existing worker journal. It
+  releases the mutation lock while awaiting DNS and CA responses, so cleanup can proceed.
+- Internal challenge owners are excluded from external authentication, client listings,
+  and file-config client revocation. No gateway token setup is required for issuance.
+- ACME account credentials and pending/current certificate keys are encrypted at rest.
+  The order URL, CSR, and encrypted key are persisted before finalization; a restarted
+  issuer resumes the order. A crash between remote order creation and persistence can
+  still leave an unused CA order, but no DNS has been changed for that order yet.
+- Downloaded certificates must match both the saved key and requested SANs before the
+  current key/chain pair is replaced atomically. Failed renewals retain the previous pair.
+- Renewal uses two thirds of actual certificate validity. ARI scheduling is not implemented.
+  Initial requests stop after five failures; existing certificates retry daily thereafter.
+- Cleanup is queued on success, failure, or timeout. A process crash also retains the DNS
+  journal and expiration lease. Existing at-least-once provider mutation limitations apply.
+- Authenticated admin downloads provide PEM chain, key, and atomic bundle retrieval.
+  Deployment to consuming services and scoped certificate retrieval credentials are not
+  implemented. Existing external gateway clients can still own their full lifecycle.
+- Local simulated-CA/DNS tests cover automated wildcard/apex issuance, cleanup, saved-order
+  recovery after finalization, renewal scheduling, key rotation, failed renewal retention,
+  request authorization and downloads. Live staging verification remains a release gate.
 
 ## Configuration contract
 

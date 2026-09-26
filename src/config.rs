@@ -17,6 +17,8 @@ use std::{
 pub struct Config {
     pub server: Server,
     #[serde(default)]
+    pub acme: crate::acme::Settings,
+    #[serde(default)]
     pub providers: Vec<Provider>,
     #[serde(default)]
     pub clients: Vec<Client>,
@@ -102,6 +104,7 @@ pub fn write(path: &Path, config: &Config) -> anyhow::Result<()> {
 }
 
 pub fn normalize(config: &mut Config, vault: &Vault, drivers: &[Driver]) -> anyhow::Result<()> {
+    config.acme.normalize()?;
     anyhow::ensure!(
         (50..=100_000).contains(&config.server.audit_retention),
         "audit retention must be 50..100000 events"
@@ -236,10 +239,16 @@ pub async fn sync(tx: &mut Transaction<'_, Sqlite>, config: &Config) -> anyhow::
             .bind(&p.id).bind(&p.name).bind(&p.driver).bind(&p.zone).bind(URL_SAFE_NO_PAD.decode(&p.encrypted_credentials)?).bind(now()).execute(&mut **tx).await?;
     }
     // Removed clients remain as revoked history for challenge ownership and audit references.
-    sqlx::query("UPDATE clients SET revoked=1")
+    sqlx::query("UPDATE clients SET revoked=1 WHERE managed=0")
         .execute(&mut **tx)
         .await?;
     for c in &config.clients {
+        let managed: bool =
+            sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM clients WHERE id=? AND managed=1)")
+                .bind(&c.id)
+                .fetch_one(&mut **tx)
+                .await?;
+        anyhow::ensure!(!managed, "client ID is reserved for certificate management");
         sqlx::query("INSERT INTO clients(id,name,token_hash,scopes,revoked,created_at) VALUES(?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET name=excluded.name,token_hash=excluded.token_hash,scopes=excluded.scopes,revoked=excluded.revoked")
             .bind(&c.id).bind(&c.name).bind(URL_SAFE_NO_PAD.decode(&c.token_hash)?).bind(serde_json::to_string(&c.scopes)?).bind(c.revoked).bind(now()).execute(&mut **tx).await?;
     }

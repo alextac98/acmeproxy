@@ -137,15 +137,20 @@ async fn main() -> anyhow::Result<()> {
     };
     let listener = tokio::net::TcpListener::bind(&address).await?;
     let worker = tokio::spawn(store::run_worker(app.clone()));
+    let certificates = tokio::spawn(acmeproxy::certificates::run_worker(app.clone()));
     tracing::info!(%address, providers=app.drivers.len(), "ACME Proxy listening");
-    axum::serve(listener, api::router(app))
-        .with_graceful_shutdown(async {
-            let mut term =
-                tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
-                    .expect("signal handler");
-            tokio::select! { _ = tokio::signal::ctrl_c() => {}, _ = term.recv() => {} }
-        })
-        .await?;
+    axum::serve(
+        listener,
+        api::router(app).into_make_service_with_connect_info::<std::net::SocketAddr>(),
+    )
+    .with_graceful_shutdown(async {
+        let mut term = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
+            .expect("signal handler");
+        tokio::select! { _ = tokio::signal::ctrl_c() => {}, _ = term.recv() => {} }
+    })
+    .await?;
+    certificates.abort();
+    let _ = certificates.await;
     worker.abort();
     let _ = worker.await;
     drop(lock);
