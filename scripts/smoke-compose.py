@@ -95,14 +95,17 @@ dns_cf_rm() {
             request('/present', challenge, client_auth)
             config = read('config.toml')
             assert b'fixture-secret' not in config and b'encrypted_credentials' in config
-            assert any(c['state'] == 'active' for c in request('/api/admin/overview', auth=admin)['challenges'])
+            active = request('/api/admin/overview', auth=admin)['challenges']
+            assert len(active) == 1 and active[0]['state'] == 'active'
+            challenge_id = active[0]['id']
             dc('stop')
             backup = dc('run', '--rm', '--no-deps', '-T', '--entrypoint', 'tar', 'acmeproxy', '--exclude=./scratch', '-C', '/config', '-czf', '-', '.')
             write(args.image, volumes[0])
             url = start()
             assert read('admin.token') == token and read('master.key') == key
             request('/cleanup', challenge, client_auth)
-            assert all(c['state'] == 'cleaned' for c in request('/api/admin/overview', auth=admin)['challenges'])
+            cleaned = request('/api/admin/overview', auth=admin)['challenges']
+            assert [(c['id'], c['state']) for c in cleaned] == [(challenge_id, 'cleaned')]
             dc('down')
             # Restore the original snapshot with its original image into a new volume.
             write(args.previous_image or args.image, volumes[1])
@@ -110,7 +113,8 @@ dns_cf_rm() {
             url = start()
             assert read('admin.token') == token and read('master.key') == key
             request('/cleanup', challenge, client_auth)
-            assert all(c['state'] == 'cleaned' for c in request('/api/admin/overview', auth=admin)['challenges'])
+            cleaned = request('/api/admin/overview', auth=admin)['challenges']
+            assert [(c['id'], c['state']) for c in cleaned] == [(challenge_id, 'cleaned')]
             print('Compose fresh install, missing-key protection, encrypted state, challenge lifecycle, replacement/upgrade and backup restore passed.')
         finally:
             dc('down', '--remove-orphans')
