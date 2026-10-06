@@ -2,9 +2,10 @@
 
 <img src="web/brand/logo.png" alt="ACME Proxy logo" width="360" />
 
-A self-hosted DNS-01 challenge gateway with a small admin UI. Keep DNS API credentials
-in one place and issue revocable, domain-scoped credentials to services on your network.
-Services continue to manage their own certificates and private keys.
+A self-hosted internal ACME endpoint, DNS-01 challenge gateway, and optional certificate
+manager with a small admin UI. Configure DNS API credentials once, then request certificates by domain:
+validation, issuance, cleanup, and renewal run automatically. You can also issue revocable,
+domain-scoped gateway credentials to services that manage their own certificates and keys.
 
 **Development preview.** The gateway and worker lifecycle are tested with a local fake
 DNS provider. The catalog contains 184 available acme.sh adapters; those providers have
@@ -116,6 +117,82 @@ file edits apply on restart. Older events are automatically deleted as new ones
 arrive, and reducing the limit prunes existing history. The UI asks for confirmation
 before reducing it. This is the application audit log, not raw server stdout.
 
+## Internal ACME endpoint (Certbot and other ACME clients)
+
+Open **Settings** to enable a **Trusted network** or **Approved ACME accounts** endpoint.
+Point clients at `http://YOUR-SERVER:8080/acme/directory` (use an HTTPS reverse proxy for
+clients that require TLS). Configure DNS credentials once on this server; clients keep
+their own keys and use standard ACME issuance and renewal, with no DNS plugin, gateway
+token, or manual challenge. Allowed networks and optional domain scopes control access.
+The endpoint starts disabled and defaults to Let's Encrypt staging when enabled.
+
+[ACME setup, Certbot, Home Assistant, and protocol details](docs/ACME.md)
+
+## Managed certificates
+
+Configure a DNS provider connection for your zone, open **Certificates**, and choose
+**Request certificate**. Enter up to 20 domains (including wildcards), choose a trusted
+Let's Encrypt certificate or an untrusted staging test certificate, and accept the
+subscriber agreement. Certificate requesters do not need DNS credentials, gateway client
+tokens, external ACME clients, or manual TXT records. Existing admin authentication applies.
+The operator must first configure working DNS API credentials for every requested domain.
+
+The background issuer uses DNS-01 through the same journal and adapters as gateway clients.
+It checks TXT propagation through the server's configured DNS resolvers before asking the
+CA to validate. Public authoritative DNS must expose those records; inbound HTTP/HTTPS
+ports are not required for DNS-01. Provider multi-value TXT support is required when
+validating an apex and wildcard together. CNAME delegation is not supported.
+
+Requests show progress and errors in the UI. Each attempt is bounded to 20 minutes,
+including up to 10 minutes of propagation checking per challenge. Failed attempts queue
+DNS cleanup and retry with backoff. Initial issuance stops after five failed attempts;
+use **Retry** after fixing the problem. Failed renewals continue retrying daily after
+those attempts, keeping the last issued certificate available. Failed DNS cleanup remains
+visible in **DNS validations** for retry. Repeated identical domain sets return the existing
+certificate request rather than create another order. At most 100 managed certificates
+are stored per instance.
+
+Renewal is scheduled two thirds through the certificate's actual validity period, so it
+also handles short-lived certificates. Keep the service running for renewals. **Pause
+renewal** stops future scheduled attempts; an in-progress attempt can finish. **Remove**
+deletes the stored certificate and key after DNS cleanup and stops renewal; it does not
+revoke already downloaded copies at the CA.
+
+Download the full certificate chain (`fullchain.pem`), private key (`privkey.pem`), or
+combined PEM (`bundle.pem`). Keys use ECDSA P-256. **Renewal updates the stored files;
+it does not install them on other services.** A consuming service can retrieve the latest
+files through the authenticated API and reload its own TLS configuration. These endpoints
+currently require the admin token; existing scoped gateway clients cannot retrieve keys.
+For services that should not hold admin access, continue using the existing scoped DNS
+gateway flow and let those services manage their own issuance and installation.
+
+| Method | Admin API path | Purpose |
+| --- | --- | --- |
+| GET | `/api/admin/certificates` | Metadata, progress, expiry, renewal and retry times |
+| POST | `/api/admin/certificates` | Request with `{"domains":["home.example.com"],"staging":false,"terms_agreed":true}` |
+| GET | `/api/admin/certificates/{id}/fullchain.pem` | Current leaf and intermediate certificates |
+| GET | `/api/admin/certificates/{id}/privkey.pem` | Current private key |
+| GET | `/api/admin/certificates/{id}/bundle.pem` | Current key and chain from the same issued version |
+| PUT | `/api/admin/certificates/{id}` | Set `{"auto_renew":false}` or `true` |
+| POST | `/api/admin/certificates/{id}/retry` | Retry a failed request |
+| DELETE | `/api/admin/certificates/{id}` | Remove stored certificate and stop renewal |
+
+Send `Authorization: Bearer <admin token>`. Requests return HTTP 202 when newly queued
+and HTTP 200 for an existing identical request. Downloads return HTTP 409 before first
+issuance. Download responses are non-cacheable; private keys never appear in list responses
+or activity logs. Use the bundle endpoint for an atomic key/chain retrieval during renewal.
+
+Managed requests, ACME accounts, pending orders, certificates, and renewal state live in
+`acmeproxy.sqlite`. Account keys and pending/current certificate private keys are encrypted
+with `master.key`; the issuer never writes them to plaintext scratch files. Production and
+staging accounts are separate. Interrupted jobs resume their saved order and matching key.
+Back up the entire configuration directory, including the SQLite database and master key.
+Removing DNS provider coverage can prevent subsequent renewals.
+
+The automated issuance tests use a simulated ACME CA and a local DNS server. They do not
+claim live Let's Encrypt or DNS-provider verification. Use staging with a real configured
+zone to validate your deployment before requesting trusted certificates.
+
 ## Client API
 
 For acme.sh, use the existing `dns_acmeproxy` adapter:
@@ -154,7 +231,7 @@ after the configured TTL; expiration queues cleanup rather than declaring it com
 
 Only `account.conf` and `domain.conf` adapter state is preserved. Adapters needing other
 files, custom tools, or nonstandard environment settings may need more integration.
-No CNAME delegation is implemented. The client protocol matches acme.sh; actual ACME
+No CNAME delegation is implemented. The client protocol matches acme.sh; live ACME
 issuance and Caddy/Traefik compatibility have not yet been tested.
 
 ## Nginx Proxy Manager

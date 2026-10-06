@@ -993,3 +993,14 @@ main {
     grid-column: 1 / -1;
   }
 }
+
+.checkbox-label { display: block; margin-top: 1.2rem; }
+.checkbox-label input { width: auto; margin-right: .4rem; }
+.certificate-row { flex-wrap: wrap; gap: 1rem; }
+.certificate-row .row-identity { display: block; min-width: 0; overflow-wrap: anywhere; }
+.certificate-row .row-actions { flex-wrap: wrap; }
+
+.settings-page { display: grid; gap: 24px; }
+.settings-card { padding: 24px; }
+.settings-card h2 { margin-top: 0; }
+.settings-card textarea[readonly] { white-space: pre-wrap; overflow-wrap: anywhere; }

@@ -16,10 +16,12 @@ let activityData = null,
   activityRetentionDirty = false;
 const tabs = {
   providers: ["DNS providers", "+ Add provider", "/providers"],
+  certificates: ["Certificates", "+ Request certificate", "/certificates"],
   clients: ["Clients", "+ Add client", "/clients"],
   challenges: ["DNS validations", null, "/validations"],
   activity: ["Activity", null, "/activity"],
   about: ["About", null, "/about"],
+  settings: ["Settings", null, "/settings"],
 };
 function node(tag, className, text) {
   const el = document.createElement(tag);
@@ -125,6 +127,8 @@ async function refresh() {
   renderProviders();
   renderClients();
   renderChallenges();
+  if (currentTab === "certificates") await refreshCertificates();
+  if (currentTab === "settings") await loadAcmeSettings();
   if (currentTab === "activity" && activityBefore === null && !activityLoading)
     await loadActivity().catch(showActivityError);
 }
@@ -134,6 +138,8 @@ function logout() {
   clearInterval(refreshTimer);
   data = null;
   activityRequest++;
+  acmeSettingsDirty = false;
+  acmeSettingsData = null;
   activityLoading = false;
   activityData = null;
   activityBefore = null;
@@ -190,7 +196,7 @@ function switchTab(tab, navigation = "push") {
   currentTab = tab;
   document.title = tabs[tab][0] + " · ACME Proxy";
   $("page-title").textContent = tabs[tab][0];
-  $("gateway-summary").hidden = tab === "about";
+  $("gateway-summary").hidden = tab === "about" || tab === "settings";
   $("add-button").hidden = !tabs[tab][1];
   $("add-button").textContent = tabs[tab][1];
   Object.keys(tabs).forEach((key) => ($(key + "-panel").hidden = key !== tab));
@@ -207,6 +213,10 @@ function switchTab(tab, navigation = "push") {
     });
   if (changed && tab === "activity" && data)
     loadActivity().catch(showActivityError);
+  if (changed && tab === "certificates" && data)
+    refreshCertificates().catch(error => notify(error.message, true));
+  if (changed && tab === "settings" && data)
+    loadAcmeSettings().catch(error => notify(error.message, true));
 }
 document
   .querySelectorAll("[data-tab], aside .brand")
@@ -221,7 +231,7 @@ window.addEventListener("popstate", () => {
 });
 switchTab(tabFromLocation(), "replace");
 $("add-button").onclick = () =>
-  currentTab === "providers" ? openProvider() : openClient();
+  currentTab === "providers" ? openProvider() : currentTab === "certificates" ? openCertificate() : openClient();
 $("refresh").onclick = async () => {
   const button = $("refresh");
   const status = $("refresh-status");
@@ -763,3 +773,155 @@ fetch("/healthz")
 
   })
   .catch(() => {});
+
+function openCertificate() {
+  $("certificate-form").reset();
+  $("certificate-error").textContent = "";
+  $("certificate-dialog").showModal();
+}
+$("certificate-form").onsubmit = async (event) => {
+  event.preventDefault();
+  const button = event.submitter;
+  button.disabled = true;
+  $("certificate-error").textContent = "";
+  try {
+    await api("/certificates", "POST", {
+      domains: $("certificate-domains").value.split(/\n/).map(s => s.trim()).filter(Boolean),
+      staging: $("certificate-environment").value === "staging",
+      terms_agreed: $("certificate-terms").checked,
+    });
+    $("certificate-dialog").close();
+    await refreshCertificates();
+    notify("Certificate requested. DNS validation and issuance will run automatically.");
+  } catch (error) {
+    $("certificate-error").textContent = error.message;
+  } finally {
+    button.disabled = false;
+  }
+};
+async function downloadCertificate(id, file) {
+  try {
+    const response = await fetch(`/api/admin/certificates/${id}/${file}`, { headers: { Authorization: "Bearer " + token } });
+    if (!response.ok) {
+      if (response.status === 401) logout();
+      throw new Error((await response.json()).error || "Download failed.");
+    }
+    const url = URL.createObjectURL(await response.blob());
+    const link = node("a");
+    link.href = url;
+    link.download = file;
+    document.body.append(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  } catch (error) { notify(error.message, true); }
+}
+async function refreshCertificates() {
+  const certificates = await api("/certificates");
+  if (!token) return;
+  const list = $("certificate-list");
+  list.replaceChildren();
+  if (!certificates.length) {
+    empty(list, "No managed certificates yet", "+ Request certificate", openCertificate);
+    return;
+  }
+  const date = value => new Date(value * 1000).toLocaleString();
+  for (const cert of certificates) {
+    const row = node("div", "row certificate-row");
+    const details = identity(cert.domains.join(", "), cert.staging ? "Let's Encrypt staging · Test certificate (not browser trusted)" : "Let's Encrypt");
+    const expired = cert.expires_at && cert.expires_at <= Date.now() / 1000;
+    details.append(node("div", expired ? "error" : "row-subtitle", `${expired ? "Expired · " : ""}${cert.state === "queued" ? "Queued" : cert.phase} · Automatic renewal ${cert.auto_renew ? "on" : "off"}`));
+    if (cert.expires_at) details.append(node("div", "row-subtitle", `Expires ${date(cert.expires_at)}`));
+    if (cert.auto_renew && cert.state === "issued") details.append(node("div", "row-subtitle", `Renewal scheduled ${date(cert.renew_at)}`));
+    if (cert.last_error) {
+      details.append(node("p", "error", cert.last_error));
+      if (cert.state === "queued" || (cert.state === "failed" && cert.auto_renew && cert.downloadable)) details.append(node("div", "row-subtitle", `Next attempt ${date(cert.next_attempt)}`));
+    }
+    const buttons = node("div", "row-actions");
+    if (cert.downloadable) {
+      buttons.append(action("Certificate", () => downloadCertificate(cert.id, "fullchain.pem")), action("Private key", () => downloadCertificate(cert.id, "privkey.pem")), action("PEM bundle", () => downloadCertificate(cert.id, "bundle.pem")));
+    }
+    if (cert.state === "failed") buttons.append(action("Retry", async () => {
+      try { await api(`/certificates/${cert.id}/retry`, "POST"); await refreshCertificates(); } catch (error) { notify(error.message, true); }
+    }));
+    buttons.append(action(cert.auto_renew ? "Pause renewal" : "Enable renewal", async () => {
+      try { await api(`/certificates/${cert.id}`, "PUT", { auto_renew: !cert.auto_renew }); await refreshCertificates(); } catch (error) { notify(error.message, true); }
+    }));
+    if (cert.state !== "issuing") buttons.append(action("Remove", () => confirm("Remove certificate?", "Delete this stored certificate and key and stop future renewals. Existing downloaded copies remain valid; this does not revoke the certificate.", async () => {
+      await api(`/certificates/${cert.id}`, "DELETE");
+      await refreshCertificates();
+    })));
+    row.append(details, buttons);
+    list.append(row);
+  }
+}
+
+let acmeSettingsDirty = false, acmeSettingsData = null;
+function acmeModeHelp() {
+  const mode = $("acme-mode").value;
+  $("acme-mode-help").textContent = mode === "disabled" ? "The ACME endpoint is unavailable. Existing DNS gateway clients and managed certificates continue to work." : mode === "trusted_network" ? "Every client in the allowed networks can request certificates for the allowed domains. ACME accounts are created automatically, with no operator approval or gateway token." : "Clients register their own ACME account automatically. Approve an account below before it can request certificates. No separately configured client token is needed.";
+  $("acme-base-url").required = mode !== "disabled";
+  $("acme-terms").required = mode !== "disabled";
+}
+$("acme-settings-form").addEventListener("input", () => { acmeSettingsDirty = true; });
+$("acme-settings-form").addEventListener("change", () => { acmeSettingsDirty = true; acmeModeHelp(); });
+async function loadAcmeSettings() {
+  const session = token;
+  const result = await api("/acme/settings");
+  if (!token || token !== session) return;
+  acmeSettingsData = result;
+  const settings = result.settings;
+  if (!acmeSettingsDirty) {
+    $("acme-mode").value = settings.mode;
+    $("acme-base-url").value = settings.base_url || location.origin;
+    $("acme-networks").value = settings.allowed_networks.join("\n");
+    $("acme-domains").value = settings.allowed_domains.join("\n");
+    $("acme-environment").value = settings.staging ? "staging" : "production";
+    $("acme-terms").checked = settings.terms_agreed;
+    acmeModeHelp();
+  }
+  const directory = settings.base_url ? settings.base_url + "/acme/directory" : "";
+  $("acme-directory-url").value = directory;
+  $("acme-connection-status").textContent = settings.mode === "disabled" ? "Save an enabled access mode to accept ACME clients." : `${settings.staging ? "Staging: issued certificates will not be browser trusted." : "Production: certificates are issued by Let's Encrypt."} ${settings.mode === "approved_accounts" ? "New accounts need approval below." : "Clients in the allowed networks can request covered domains immediately."}`;
+  const quote = value => "'" + value.replaceAll("'", "'\"'\"'") + "'";
+  $("acme-command").value = directory ? `certbot certonly --standalone --non-interactive --agree-tos \\\n  --server ${quote(directory)} \\\n  --email you@example.com -d ha.example.com \\\n  --issuance-timeout 1200` : "Configure the server URL first.";
+  const accounts = $("acme-account-list"); accounts.replaceChildren();
+  if (!result.accounts.length) empty(accounts, "No ACME accounts yet. Point a client at the directory URL to register.");
+  for (const account of result.accounts) {
+    const approved = settings.approved_accounts.includes(account.id);
+    const row = node("div", "row certificate-row");
+    row.append(identity(account.contact.join(", ") || "ACME account", `${account.id} · ${account.status === "deactivated" ? "Deactivated" : settings.mode === "trusted_network" ? "Allowed by network policy" : approved ? "Approved" : "Awaiting approval"}`));
+    const buttons = node("div", "row-actions");
+    if (account.status === "valid" && settings.mode === "approved_accounts") buttons.append(action(approved ? "Remove approval" : "Approve", async () => {
+      try { await api(`/acme/accounts/${account.id}`, "PUT", { approved: !approved }); await loadAcmeSettings(); } catch (error) { notify(error.message, true); }
+    }));
+    row.append(buttons); accounts.append(row);
+  }
+  const orders = $("acme-order-list"); orders.replaceChildren();
+  if (!result.orders.length) empty(orders, "No ACME orders yet");
+  for (const order of result.orders) {
+    const row = node("div", "row certificate-row");
+    row.append(identity(order.domains.join(", "), `${order.staging ? "Staging" : "Production"} · ${order.state} · ${order.phase}`));
+    if (order.error) row.append(node("p", "error", order.error));
+    orders.append(row);
+  }
+}
+$("acme-settings-refresh").onclick = () => loadAcmeSettings().catch(error => notify(error.message, true));
+$("acme-settings-form").onsubmit = async event => {
+  event.preventDefault();
+  const button = event.submitter; button.disabled = true;
+  $("acme-settings-error").textContent = "";
+  const lines = id => $(id).value.split(/\n/).map(s => s.trim()).filter(Boolean);
+  try {
+    await api("/acme/settings", "PUT", {
+      mode: $("acme-mode").value,
+      base_url: $("acme-base-url").value.trim(),
+      allowed_networks: lines("acme-networks"), allowed_domains: lines("acme-domains"),
+      staging: $("acme-environment").value === "staging", terms_agreed: $("acme-terms").checked,
+    });
+    acmeSettingsDirty = false;
+    await loadAcmeSettings();
+    notify("ACME settings saved.");
+  } catch (error) { $("acme-settings-error").textContent = error.message; }
+  finally { button.disabled = false; }
+};
