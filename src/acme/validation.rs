@@ -36,6 +36,9 @@ fn accepts_address(settings: &Settings, address: IpAddr) -> bool {
         {
             return false;
         }
+        // fd00:ec2::254 is AWS IMDS; fd20:ce::254 is Google Compute Engine metadata.
+        // Both are unique-local addresses that validation_networks could allow.
+        // Deny them here so HTTP-01 cannot reach instance metadata.
         IpAddr::V6(ip)
             if ip.is_unspecified()
                 || ip.is_multicast()
