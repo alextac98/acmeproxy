@@ -57,7 +57,6 @@ pub fn router(app: App) -> Router {
             "/acme/settings",
             get(crate::acme::get_settings).put(crate::acme::put_settings),
         )
-        .route("/acme/accounts/{id}", put(crate::acme::approve_account))
         .route(
             "/certificates",
             get(crate::certificates::list).post(crate::certificates::create),

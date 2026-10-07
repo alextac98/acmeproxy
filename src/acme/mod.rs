@@ -1,13 +1,15 @@
 //! Downstream ACME interface. Clients own certificate private keys; this service
-//! authorizes domains by operator policy and performs upstream DNS-01 validation.
+//! verifies downstream HTTP-01 and performs upstream DNS-01 validation.
 mod protocol;
+mod validation;
 mod worker;
+pub use validation::run_worker as run_validation_worker;
 pub(crate) use worker::process_one;
 
 use crate::{App, api, config, security};
 use axum::{
     Json, Router,
-    extract::{Path, State},
+    extract::State,
     routing::{get, post},
 };
 use serde::{Deserialize, Serialize};
@@ -19,8 +21,9 @@ use sqlx::Row;
 pub enum Mode {
     #[default]
     Disabled,
-    TrustedNetwork,
-    ApprovedAccounts,
+    // Existing installations are upgraded to verification, never trusted issuance.
+    #[serde(alias = "trusted_network", alias = "approved_accounts")]
+    Http01,
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -30,6 +33,10 @@ pub struct Settings {
     pub base_url: String,
     pub allowed_networks: Vec<String>,
     pub allowed_domains: Vec<String>,
+    /// Additional non-public networks reachable by the HTTP-01 verifier.
+    pub validation_networks: Vec<String>,
+    /// Accept old configuration files; approvals no longer bypass HTTP-01.
+    #[serde(skip_serializing)]
     pub approved_accounts: Vec<String>,
     pub staging: bool,
     pub terms_agreed: bool,
@@ -51,6 +58,7 @@ impl Default for Settings {
             .map(|s| s.to_string())
             .collect(),
             allowed_domains: vec![],
+            validation_networks: vec![],
             approved_accounts: vec![],
             staging: true,
             terms_agreed: false,
@@ -87,17 +95,18 @@ impl Settings {
         anyhow::ensure!(
             self.allowed_networks.len() <= 100
                 && self.allowed_domains.len() <= 100
-                && self.approved_accounts.len() <= 1000,
+                && self.validation_networks.len() <= 100,
             "ACME policy is too large"
         );
-        for network in &mut self.allowed_networks {
+        for network in self
+            .allowed_networks
+            .iter_mut()
+            .chain(&mut self.validation_networks)
+        {
             *network = network.trim().parse::<ipnet::IpNet>()?.trunc().to_string();
         }
         for domain in &mut self.allowed_domains {
             *domain = security::scope(domain.trim()).map_err(anyhow::Error::msg)?;
-        }
-        for id in &self.approved_accounts {
-            uuid::Uuid::parse_str(id)?;
         }
         Ok(())
     }
@@ -109,11 +118,6 @@ impl Settings {
             n.parse::<ipnet::IpNet>()
                 .is_ok_and(|n| n.contains(&ip.to_canonical()))
         })
-    }
-    fn accepts_account(&self, id: &str) -> bool {
-        self.mode == Mode::TrustedNetwork
-            || (self.mode == Mode::ApprovedAccounts
-                && self.approved_accounts.iter().any(|v| v == id))
     }
 }
 
@@ -127,6 +131,7 @@ pub fn router() -> Router<App> {
         .route("/account/{id}/orders", post(protocol::handle))
         .route("/order/{id}", post(protocol::handle))
         .route("/authz/{id}/{index}", post(protocol::handle))
+        .route("/challenge/{id}/{index}", post(protocol::handle))
         .route("/finalize/{id}", post(protocol::handle))
         .route("/certificate/{id}", post(protocol::handle))
         .route("/revoke-cert", post(protocol::handle))
@@ -149,45 +154,14 @@ pub async fn put_settings(
 ) -> api::Result<Json<Value>> {
     settings.normalize().map_err(|_| {
         api::bad(
-            "check ACME mode, public URL, network CIDRs, domain scopes, and subscriber agreement",
+            "check ACME mode, public URL, client and validation network CIDRs, domain scopes, and subscriber agreement",
         )
     })?;
     let _guard = app.mutation.lock().await;
     let mut next = app.config.lock().await.value.clone();
-    // Account approval has a separate endpoint; a form save must not overwrite concurrent approvals.
-    settings.approved_accounts = next.acme.approved_accounts.clone();
     next.acme = settings;
     config::apply(&app, next, "acme.settings_changed", "acme").await?;
     Ok(Json(json!({"status":"saved"})))
-}
-
-#[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct Approval {
-    approved: bool,
-}
-pub async fn approve_account(
-    State(app): State<App>,
-    Path(id): Path<String>,
-    Json(input): Json<Approval>,
-) -> api::Result<Json<Value>> {
-    let _guard = app.mutation.lock().await;
-    let exists: bool = sqlx::query_scalar(
-        "SELECT EXISTS(SELECT 1 FROM downstream_accounts WHERE id=? AND status='valid')",
-    )
-    .bind(&id)
-    .fetch_one(&app.db)
-    .await?;
-    if !exists {
-        return Err(api::bad("active ACME account not found"));
-    }
-    let mut next = app.config.lock().await.value.clone();
-    next.acme.approved_accounts.retain(|v| v != &id);
-    if input.approved {
-        next.acme.approved_accounts.push(id.clone());
-    }
-    config::apply(&app, next, "acme.account_approval_changed", &id).await?;
-    Ok(Json(json!({"approved":input.approved})))
 }
 
 /// Exact policies do not implicitly authorize wildcard certificates. Wildcard
@@ -222,11 +196,15 @@ async fn check_domains(app: &App, settings: &Settings, domains: &[String]) -> an
     Ok(())
 }
 
-async fn check_order_policy(app: &App, id: &str) -> anyhow::Result<()> {
+async fn check_order_access(app: &App, id: &str) -> anyhow::Result<()> {
+    anyhow::ensure!(
+        app.healthy.load(std::sync::atomic::Ordering::SeqCst),
+        "configuration needs restart"
+    );
     let settings = app.config.lock().await.value.acme.clone();
     let row = sqlx::query("SELECT o.account_id,o.domains,o.expires_at,a.status FROM acme_orders o JOIN downstream_accounts a ON a.id=o.account_id WHERE o.id=?").bind(id).fetch_one(&app.db).await?;
     anyhow::ensure!(
-        settings.accepts_account(row.get("account_id"))
+        settings.mode == Mode::Http01
             && row.get::<String, _>("status") == "valid"
             && row.get::<i64, _>("expires_at") > crate::now(),
         "ACME order is no longer authorized"
@@ -237,6 +215,30 @@ async fn check_order_policy(app: &App, id: &str) -> anyhow::Result<()> {
         &serde_json::from_str::<Vec<String>>(row.get("domains"))?,
     )
     .await
+}
+
+async fn check_order_policy(app: &App, id: &str) -> anyhow::Result<()> {
+    check_order_access(app, id).await?;
+    let domains: Vec<String> = serde_json::from_str(
+        &sqlx::query_scalar::<_, String>("SELECT domains FROM acme_orders WHERE id=?")
+            .bind(id)
+            .fetch_one(&app.db)
+            .await?,
+    )?;
+    let authorizations = sqlx::query(
+        "SELECT domain,state,key_authorization,validated_at FROM acme_authorizations WHERE order_id=? ORDER BY identifier_index",
+    ).bind(id).fetch_all(&app.db).await?;
+    anyhow::ensure!(
+        authorizations.len() == domains.len()
+            && authorizations.iter().zip(&domains).all(|(a, d)| {
+                a.get::<String, _>("domain") == *d
+                    && a.get::<String, _>("state") == "valid"
+                    && a.get::<Option<String>, _>("key_authorization").is_some()
+                    && a.get::<Option<i64>, _>("validated_at").is_some()
+            }),
+        "every requested name must pass HTTP-01 verification"
+    );
+    Ok(())
 }
 
 #[cfg(test)]

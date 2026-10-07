@@ -33,6 +33,7 @@ async fn configure(app: &App, mode: Mode, base_url: &str) {
         mode,
         base_url: base_url.into(),
         terms_agreed: true,
+        validation_networks: vec!["127.0.0.1/32".into()],
         ..Default::default()
     };
     config::apply(app, next, "test.acme_settings", "acme")
@@ -92,33 +93,114 @@ fn csr_for(names: Vec<String>, key: &rcgen::KeyPair) -> rcgen::CertificateSignin
     params.serialize_request(key).unwrap()
 }
 
+type HttpResponses = Arc<Mutex<std::collections::BTreeMap<String, String>>>;
+async fn serve_http(fixture: &mut Fixture) -> (std::net::SocketAddr, HttpResponses) {
+    let responses = HttpResponses::default();
+    let values = responses.clone();
+    let router = axum::Router::new().route(
+        "/.well-known/acme-challenge/{token}",
+        axum::routing::get(
+            move |axum::extract::Path(token): axum::extract::Path<String>| {
+                let values = values.clone();
+                async move {
+                    match values.lock().unwrap().get(&token) {
+                        Some(value) => (StatusCode::OK, format!("{value}\n")),
+                        None => (StatusCode::NOT_FOUND, String::new()),
+                    }
+                }
+            },
+        ),
+    );
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let address = listener.local_addr().unwrap();
+    fixture.tasks.push(tokio::spawn(async move {
+        axum::serve(listener, router).await.unwrap();
+    }));
+    (address, responses)
+}
+async fn validate_http(app: &App, address: std::net::SocketAddr) -> bool {
+    validation::process_one_with(app, |domain, expected, settings| async move {
+        validation::verify_resolved(&domain, &expected, &settings, &[address]).await
+    })
+    .await
+    .unwrap()
+}
+async fn complete_order(
+    app: &App,
+    key: &Signer,
+    kid: &str,
+    order: &Value,
+    address: std::net::SocketAddr,
+    responses: &HttpResponses,
+) {
+    for authz in order["authorizations"].as_array().unwrap() {
+        let path = url::Url::parse(authz.as_str().unwrap())
+            .unwrap()
+            .path()
+            .to_string();
+        let authorization = signed(app, key, kid, &path, Value::Null).await.2;
+        let challenge = &authorization["challenges"][0];
+        let token = challenge["token"].as_str().unwrap();
+        responses.lock().unwrap().insert(
+            token.into(),
+            format!("{token}.{}", protocol::thumbprint(&key.jwk)),
+        );
+        let path = url::Url::parse(challenge["url"].as_str().unwrap())
+            .unwrap()
+            .path()
+            .to_string();
+        assert_eq!(
+            signed(app, key, kid, &path, json!({})).await.0,
+            StatusCode::OK
+        );
+    }
+    while validate_http(app, address).await {}
+}
+
 #[tokio::test]
 async fn standard_acme_client_keeps_private_key_and_uses_upstream_dns01() {
     let mut fixture = Fixture::new().await;
     let resolver = fixture.resolver().await;
+    let (address, responses) = serve_http(&mut fixture).await;
     let app = &fixture.app;
-    configure(app, Mode::TrustedNetwork, "https://downstream.test").await;
+    configure(app, Mode::Http01, "https://downstream.test").await;
     let downstream = client(app).await;
     let mut order = downstream
         .new_order(&NewOrder::new(&[
             Identifier::Dns("example.com".into()),
-            Identifier::Dns("*.example.com".into()),
+            Identifier::Dns("home.example.com".into()),
         ]))
         .await
         .unwrap();
-    assert_eq!(order.state().status, OrderStatus::Ready);
+    assert_eq!(order.state().status, OrderStatus::Pending);
     let mut auths = order.authorizations();
     while let Some(auth) = auths.next().await {
-        let auth = auth.unwrap();
-        assert_eq!(auth.status, AuthorizationStatus::Valid);
-        assert!(
-            auth.challenges.is_empty(),
-            "client must not be asked to publish DNS"
+        let mut auth = auth.unwrap();
+        assert_eq!(auth.status, AuthorizationStatus::Pending);
+        assert_eq!(auth.challenges.len(), 1);
+        assert_eq!(
+            auth.challenges[0].r#type,
+            instant_acme::ChallengeType::Http01
         );
+        let mut challenge = auth.challenge(instant_acme::ChallengeType::Http01).unwrap();
+        responses.lock().unwrap().insert(
+            challenge.token.clone(),
+            challenge.key_authorization().as_str().to_string(),
+        );
+        challenge.set_ready().await.unwrap();
     }
+    while validate_http(app, address).await {}
+    assert_eq!(
+        order
+            .poll_ready(&instant_acme::RetryPolicy::default())
+            .await
+            .unwrap(),
+        OrderStatus::Ready
+    );
     let key = rcgen::KeyPair::generate().unwrap();
     let mut params =
-        rcgen::CertificateParams::new(vec!["example.com".into(), "*.example.com".into()]).unwrap();
+        rcgen::CertificateParams::new(vec!["example.com".into(), "home.example.com".into()])
+            .unwrap();
     params.distinguished_name = rcgen::DistinguishedName::new();
     let csr = params.serialize_request(&key).unwrap();
     order.finalize_csr(csr.der()).await.unwrap();
@@ -200,6 +282,107 @@ async fn standard_acme_client_keeps_private_key_and_uses_upstream_dns01() {
             .unwrap()
             .is_empty()
     );
+}
+
+#[tokio::test]
+async fn external_acme_client_issues_directly_using_authenticated_dns_gateway() {
+    let fixture = Fixture::new().await;
+    let app = &fixture.app;
+    let token = security::random_secret();
+    let mut next = app.config.lock().await.value.clone();
+    next.clients.push(config::Client {
+        id: uuid::Uuid::new_v4().to_string(),
+        name: "External ACME client".into(),
+        scopes: vec!["home.example.com".into()],
+        revoked: false,
+        token_hash: String::new(),
+        token: Some(token.clone()),
+    });
+    config::apply(app, next, "test.gateway_client", "client")
+        .await
+        .unwrap();
+    let upstream = ca(&fixture);
+    let account = upstream.account().await;
+    let mut order = account
+        .new_order(&NewOrder::new(&[Identifier::Dns(
+            "home.example.com".into(),
+        )]))
+        .await
+        .unwrap();
+    let mut auths = order.authorizations();
+    let mut auth = auths.next().await.unwrap().unwrap();
+    let mut challenge = auth.challenge(instant_acme::ChallengeType::Dns01).unwrap();
+    let value = challenge.key_authorization().dns_value();
+    let gateway = |path: &'static str, credential: String| {
+        let value = value.clone();
+        async move {
+            api::router(app.clone())
+                .oneshot(
+                    Request::builder()
+                        .method("POST")
+                        .uri(path)
+                        .header("content-type", "application/json")
+                        .header("authorization", format!("Bearer {credential}"))
+                        .body(Body::from(
+                            json!({"fqdn":"_acme-challenge.home.example.com","value":value})
+                                .to_string(),
+                        ))
+                        .unwrap(),
+                )
+                .await
+                .unwrap()
+        }
+    };
+    assert_eq!(
+        gateway("/present", "wrong-token".into()).await.status(),
+        StatusCode::UNAUTHORIZED
+    );
+    assert_eq!(
+        gateway("/present", token.clone()).await.status(),
+        StatusCode::OK
+    );
+    challenge.set_ready().await.unwrap();
+    assert_eq!(
+        order
+            .poll_ready(&instant_acme::RetryPolicy::default())
+            .await
+            .unwrap(),
+        OrderStatus::Ready
+    );
+    let key = rcgen::KeyPair::generate().unwrap();
+    let csr = csr_for(vec!["home.example.com".into()], &key);
+    order.finalize_csr(csr.der()).await.unwrap();
+    let chain = order
+        .poll_certificate(&instant_acme::RetryPolicy::default())
+        .await
+        .unwrap();
+    let (_, pem) = x509_parser::pem::parse_x509_pem(chain.as_bytes()).unwrap();
+    assert_eq!(
+        pem.parse_x509()
+            .unwrap()
+            .public_key()
+            .subject_public_key
+            .data
+            .as_ref(),
+        key.public_key_raw()
+    );
+    assert_eq!(gateway("/cleanup", token).await.status(), StatusCode::OK);
+    assert!(
+        std::fs::read_to_string(&upstream.records)
+            .unwrap()
+            .is_empty()
+    );
+    assert_eq!(upstream.state.lock().unwrap().finalized, 1);
+    for table in ["certificates", "acme_orders"] {
+        assert_eq!(
+            sqlx::query_scalar::<_, i64>(&format!("SELECT COUNT(*) FROM {table}"))
+                .fetch_one(&app.db)
+                .await
+                .unwrap(),
+            0,
+            "the DNS gateway never takes over the client's certificate lifecycle"
+        );
+    }
 }
 
 struct Signer {
@@ -323,7 +506,7 @@ async fn signed(
 }
 
 #[tokio::test]
-async fn settings_modes_networks_signatures_nonces_and_approval() {
+async fn settings_networks_signatures_nonces_and_self_service_registration() {
     let fixture = Fixture::new().await;
     let app = &fixture.app;
     assert_eq!(
@@ -332,7 +515,7 @@ async fn settings_modes_networks_signatures_nonces_and_approval() {
             .0,
         StatusCode::NOT_FOUND
     );
-    configure(app, Mode::ApprovedAccounts, "https://downstream.test").await;
+    configure(app, Mode::Http01, "https://downstream.test").await;
     assert_eq!(
         call(
             app,
@@ -387,44 +570,19 @@ async fn settings_modes_networks_signatures_nonces_and_approval() {
         StatusCode::BAD_REQUEST
     );
     let input = json!({"identifiers":[{"type":"dns","value":"home.example.com"}]});
+    let result = signed(app, &key, kid, "/acme/new-order", input).await;
+    assert_eq!(result.0, StatusCode::CREATED);
     assert_eq!(
-        signed(app, &key, kid, "/acme/new-order", input.clone())
-            .await
-            .0,
-        StatusCode::FORBIDDEN
-    );
-    let account = kid.rsplit('/').next().unwrap().to_string();
-    let _ = approve_account(
-        State(app.clone()),
-        Path(account.clone()),
-        Json(Approval { approved: true }),
-    )
-    .await
-    .unwrap();
-    assert_eq!(
-        signed(app, &key, kid, "/acme/new-order", input.clone())
-            .await
-            .0,
-        StatusCode::CREATED
-    );
-    let _ = approve_account(
-        State(app.clone()),
-        Path(account),
-        Json(Approval { approved: false }),
-    )
-    .await
-    .unwrap();
-    assert_eq!(
-        signed(app, &key, kid, "/acme/new-order", input).await.0,
-        StatusCode::FORBIDDEN
+        result.2["status"], "pending",
+        "registration needs no operator approval, but cannot skip HTTP-01"
     );
     let loaded = config::ConfigFile::load(app.config.lock().await.path.clone()).unwrap();
     assert_eq!(
         loaded.value.acme.mode,
-        Mode::ApprovedAccounts,
-        "mode changes persist in TOML"
+        Mode::Http01,
+        "HTTP-01 mode persists in TOML"
     );
-    configure(app, Mode::TrustedNetwork, "https://downstream.test").await;
+    configure(app, Mode::Http01, "https://downstream.test").await;
     assert_eq!(
         signed(
             app,
@@ -459,9 +617,10 @@ async fn settings_modes_networks_signatures_nonces_and_approval() {
 
 #[tokio::test]
 async fn csr_binding_key_rollover_and_policy_revocation() {
-    let fixture = Fixture::new().await;
+    let mut fixture = Fixture::new().await;
+    let (address, responses) = serve_http(&mut fixture).await;
     let app = &fixture.app;
-    configure(app, Mode::TrustedNetwork, "https://downstream.test").await;
+    configure(app, Mode::Http01, "https://downstream.test").await;
     let key = Signer::new();
     let kid = register(app, &key).await;
     let (_, _, order) = signed(
@@ -476,6 +635,7 @@ async fn csr_binding_key_rollover_and_policy_revocation() {
         .unwrap()
         .path()
         .to_string();
+    complete_order(app, &key, &kid, &order, address, &responses).await;
     let other = rcgen::KeyPair::generate().unwrap();
     let csr = csr_for(vec!["other.example.com".into()], &other);
     assert_eq!(
@@ -572,15 +732,485 @@ fn wildcard_policy_and_csr_signature_are_checked() {
     assert!(protocol::validate_csr(&corrupt, &["home.example.com".into()]).is_err());
 }
 
+fn resource_path(value: &Value) -> String {
+    url::Url::parse(value.as_str().unwrap())
+        .unwrap()
+        .path()
+        .to_string()
+}
+
+#[tokio::test]
+async fn every_hostname_requires_account_bound_http01_and_failures_cannot_issue() {
+    let mut fixture = Fixture::new().await;
+    let (address, responses) = serve_http(&mut fixture).await;
+    let app = &fixture.app;
+    configure(app, Mode::Http01, "https://downstream.test").await;
+    let key = Signer::new();
+    let kid = register(app, &key).await;
+    let order = signed(app, &key, &kid, "/acme/new-order", json!({"identifiers":[{"type":"dns","value":"home.example.com"},{"type":"dns","value":"other.example.com"}]})).await.2;
+    let csr_key = rcgen::KeyPair::generate().unwrap();
+    let csr = csr_for(
+        vec!["home.example.com".into(), "other.example.com".into()],
+        &csr_key,
+    );
+    let finalize = resource_path(&order["finalize"]);
+    assert_eq!(
+        signed(
+            app,
+            &key,
+            &kid,
+            &finalize,
+            json!({"csr":B64.encode(csr.der())})
+        )
+        .await
+        .2["type"],
+        "urn:ietf:params:acme:error:orderNotReady"
+    );
+    let another = Signer::new();
+    let another_kid = register(app, &another).await;
+    for (index, authz) in order["authorizations"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .enumerate()
+    {
+        let authz = signed(app, &key, &kid, &resource_path(authz), Value::Null)
+            .await
+            .2;
+        assert_eq!(authz["status"], "pending");
+        assert_eq!(authz["challenges"].as_array().unwrap().len(), 1);
+        let challenge = &authz["challenges"][0];
+        assert_eq!(challenge["type"], "http-01");
+        let path = resource_path(&challenge["url"]);
+        assert_eq!(
+            signed(app, &another, &another_kid, &path, json!({}))
+                .await
+                .0,
+            StatusCode::NOT_FOUND
+        );
+        let token = challenge["token"].as_str().unwrap();
+        assert!(B64.decode(token).unwrap().len() >= 16);
+        let thumbprint = protocol::thumbprint(if index == 0 { &key.jwk } else { &another.jwk });
+        responses
+            .lock()
+            .unwrap()
+            .insert(token.into(), format!("{token}.{thumbprint}"));
+        assert_eq!(
+            signed(app, &key, &kid, &path, json!({})).await.2["status"],
+            "processing"
+        );
+        assert!(validate_http(app, address).await);
+        // Repeated acknowledgements cannot reset the attempt or schedule another fetch.
+        assert_eq!(
+            signed(app, &key, &kid, &path, json!({})).await.0,
+            StatusCode::OK
+        );
+        assert!(!validate_http(app, address).await);
+        let state: String = sqlx::query_scalar("SELECT state FROM acme_orders")
+            .fetch_one(&app.db)
+            .await
+            .unwrap();
+        assert_eq!(
+            state, "pending",
+            "one successful hostname does not authorize the whole order"
+        );
+    }
+    let count: i64 =
+        sqlx::query_scalar("SELECT COUNT(*) FROM acme_authorizations WHERE state='valid'")
+            .fetch_one(&app.db)
+            .await
+            .unwrap();
+    assert_eq!(count, 1);
+    for _ in 0..2 {
+        sqlx::query("UPDATE acme_authorizations SET next_attempt=0 WHERE state='processing'")
+            .execute(&app.db)
+            .await
+            .unwrap();
+        assert!(validate_http(app, address).await);
+    }
+    let state: String = sqlx::query_scalar("SELECT state FROM acme_orders")
+        .fetch_one(&app.db)
+        .await
+        .unwrap();
+    assert_eq!(state, "invalid");
+    assert_eq!(
+        signed(
+            app,
+            &key,
+            &kid,
+            &finalize,
+            json!({"csr":B64.encode(csr.der())})
+        )
+        .await
+        .0,
+        StatusCode::FORBIDDEN
+    );
+    let challenge = signed(
+        app,
+        &key,
+        &kid,
+        &resource_path(&order["authorizations"][1]),
+        Value::Null,
+    )
+    .await
+    .2;
+    assert_eq!(challenge["status"], "invalid");
+    assert_eq!(
+        challenge["challenges"][0]["error"]["type"],
+        "urn:ietf:params:acme:error:unauthorized"
+    );
+    assert_eq!(
+        sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM challenges")
+            .fetch_one(&app.db)
+            .await
+            .unwrap(),
+        0,
+        "failed local proof must not publish upstream DNS"
+    );
+    assert_eq!(
+        sqlx::query_scalar::<_, i64>(
+            "SELECT COUNT(*) FROM acme_orders WHERE csr IS NOT NULL OR fullchain IS NOT NULL"
+        )
+        .fetch_one(&app.db)
+        .await
+        .unwrap(),
+        0
+    );
+}
+
+#[tokio::test]
+async fn pending_authorizations_resume_after_restart_and_keep_rollover_binding() {
+    let mut fixture = Fixture::new().await;
+    let (address, responses) = serve_http(&mut fixture).await;
+    let app = &fixture.app;
+    configure(app, Mode::Http01, "https://downstream.test").await;
+    let key = Signer::new();
+    let kid = register(app, &key).await;
+    let order = signed(
+        app,
+        &key,
+        &kid,
+        "/acme/new-order",
+        json!({"identifiers":[{"type":"dns","value":"home.example.com"}]}),
+    )
+    .await
+    .2;
+    let authz = signed(
+        app,
+        &key,
+        &kid,
+        &resource_path(&order["authorizations"][0]),
+        Value::Null,
+    )
+    .await
+    .2;
+    let challenge = &authz["challenges"][0];
+    let token = challenge["token"].as_str().unwrap();
+    responses.lock().unwrap().insert(
+        token.into(),
+        format!("{token}.{}", protocol::thumbprint(&key.jwk)),
+    );
+    assert_eq!(
+        signed(
+            app,
+            &key,
+            &kid,
+            &resource_path(&challenge["url"]),
+            json!({})
+        )
+        .await
+        .0,
+        StatusCode::OK
+    );
+    let next = Signer::new();
+    let inner = next.jws(
+        "/acme/key-change",
+        None,
+        None,
+        json!({"account":kid,"oldKey":key.jwk}),
+    );
+    assert_eq!(
+        signed(app, &key, &kid, "/acme/key-change", inner).await.0,
+        StatusCode::OK
+    );
+    let mut restarted = app.clone();
+    restarted.db = crate::store::connect(&fixture.directory.path().join("test.sqlite"), &app.vault)
+        .await
+        .unwrap();
+    restarted.config = Arc::new(tokio::sync::Mutex::new(
+        config::ConfigFile::load(app.config.lock().await.path.clone()).unwrap(),
+    ));
+    assert!(validate_http(&restarted, address).await);
+    let authz = signed(
+        &restarted,
+        &next,
+        &kid,
+        &resource_path(&order["authorizations"][0]),
+        Value::Null,
+    )
+    .await
+    .2;
+    assert_eq!(authz["status"], "valid");
+    assert!(authz["challenges"][0]["validated"].as_str().is_some());
+    assert!(
+        check_order_policy(
+            &restarted,
+            order["finalize"]
+                .as_str()
+                .unwrap()
+                .rsplit('/')
+                .next()
+                .unwrap()
+        )
+        .await
+        .is_ok()
+    );
+}
+
+#[tokio::test]
+async fn unsupported_identifiers_wildcards_and_unverified_worker_jobs_fail_closed() {
+    let mut fixture = Fixture::new().await;
+    let resolver = fixture.resolver().await;
+    let app = &fixture.app;
+    configure(app, Mode::Http01, "https://downstream.test").await;
+    let key = Signer::new();
+    let kid = register(app, &key).await;
+    for (kind, name, error) in [
+        ("dns", "*.example.com", "rejectedIdentifier"),
+        ("ip", "127.0.0.1", "unsupportedIdentifier"),
+    ] {
+        let response = signed(
+            app,
+            &key,
+            &kid,
+            "/acme/new-order",
+            json!({"identifiers":[{"type":kind,"value":name}]}),
+        )
+        .await;
+        assert_eq!(response.0, StatusCode::BAD_REQUEST);
+        assert_eq!(
+            response.2["type"],
+            format!("urn:ietf:params:acme:error:{error}")
+        );
+    }
+    let order = signed(
+        app,
+        &key,
+        &kid,
+        "/acme/new-order",
+        json!({"identifiers":[{"type":"dns","value":"home.example.com"}]}),
+    )
+    .await
+    .2;
+    let id = order["finalize"]
+        .as_str()
+        .unwrap()
+        .rsplit('/')
+        .next()
+        .unwrap();
+    let csr = csr_for(
+        vec!["home.example.com".into()],
+        &rcgen::KeyPair::generate().unwrap(),
+    );
+    // A corrupt/legacy ready job cannot get past the worker's independent proof check.
+    sqlx::query("UPDATE acme_orders SET state='processing',csr=? WHERE id=?")
+        .bind(csr.der().as_ref())
+        .bind(id)
+        .execute(&app.db)
+        .await
+        .unwrap();
+    let upstream = ca(&fixture);
+    let account = upstream.account().await;
+    assert!(
+        worker::process_one_with(app, |id, _| async move {
+            worker::issue(app, &id, account, &resolver).await
+        })
+        .await
+        .unwrap()
+    );
+    assert_eq!(upstream.state.lock().unwrap().orders.len(), 0);
+    assert_eq!(
+        sqlx::query_scalar::<_, String>("SELECT state FROM acme_orders")
+            .fetch_one(&app.db)
+            .await
+            .unwrap(),
+        "invalid"
+    );
+}
+
+#[tokio::test]
+async fn expiry_and_policy_changes_discard_http01_results() {
+    let fixture = Fixture::new().await;
+    let app = &fixture.app;
+    configure(app, Mode::Http01, "https://downstream.test").await;
+    let key = Signer::new();
+    let kid = register(app, &key).await;
+    for condition in ["networks", "unhealthy", "expired"] {
+        let order = signed(
+            app,
+            &key,
+            &kid,
+            "/acme/new-order",
+            json!({"identifiers":[{"type":"dns","value":"home.example.com"}]}),
+        )
+        .await
+        .2;
+        let authz = signed(
+            app,
+            &key,
+            &kid,
+            &resource_path(&order["authorizations"][0]),
+            Value::Null,
+        )
+        .await
+        .2;
+        let path = resource_path(&authz["challenges"][0]["url"]);
+        assert_eq!(
+            signed(app, &key, &kid, &path, json!({})).await.0,
+            StatusCode::OK
+        );
+        let id = order["finalize"]
+            .as_str()
+            .unwrap()
+            .rsplit('/')
+            .next()
+            .unwrap();
+        if condition == "expired" {
+            sqlx::query("UPDATE acme_orders SET expires_at=0 WHERE id=?")
+                .bind(id)
+                .execute(&app.db)
+                .await
+                .unwrap();
+            assert!(
+                !validation::process_one_with(app, |_, _, _| async {
+                    panic!("expired challenges must never fetch HTTP")
+                })
+                .await
+                .unwrap()
+            );
+        } else {
+            assert!(
+                validation::process_one_with(app, |_, _, _| async {
+                    if condition == "unhealthy" {
+                        app.healthy
+                            .store(false, std::sync::atomic::Ordering::SeqCst);
+                    } else {
+                        app.config
+                            .lock()
+                            .await
+                            .value
+                            .acme
+                            .validation_networks
+                            .clear();
+                    }
+                    Ok(())
+                })
+                .await
+                .unwrap()
+            );
+        }
+        assert_eq!(
+            sqlx::query_scalar::<_, String>("SELECT state FROM acme_orders WHERE id=?")
+                .bind(id)
+                .fetch_one(&app.db)
+                .await
+                .unwrap(),
+            "invalid"
+        );
+        app.healthy.store(true, std::sync::atomic::Ordering::SeqCst);
+    }
+}
+
+#[test]
+fn legacy_access_modes_upgrade_to_mandatory_http01() {
+    for mode in ["trusted_network", "approved_accounts"] {
+        let settings: Settings =
+            serde_json::from_value(json!({"mode":mode,"approved_accounts":["obsolete-approval"]}))
+                .unwrap();
+        assert_eq!(settings.mode, Mode::Http01);
+        let saved = serde_json::to_value(settings).unwrap();
+        assert_eq!(saved["mode"], "http01");
+        assert!(saved.get("approved_accounts").is_none());
+    }
+}
+
+#[tokio::test]
+async fn upgrading_preserves_issued_chains_but_invalidates_unverified_legacy_orders() {
+    let db = sqlx::sqlite::SqlitePoolOptions::new()
+        .max_connections(1)
+        .connect("sqlite::memory:")
+        .await
+        .unwrap();
+    for migration in [
+        include_str!("../../migrations/0001_initial.sql"),
+        include_str!("../../migrations/0002_audit_retention.sql"),
+        include_str!("../../migrations/0003_certificates.sql"),
+        include_str!("../../migrations/0004_acme_endpoint.sql"),
+    ] {
+        sqlx::raw_sql(migration).execute(&db).await.unwrap();
+    }
+    sqlx::query("INSERT INTO downstream_accounts(id,thumbprint,jwk,created_at) VALUES('account','thumbprint','{}',0)").execute(&db).await.unwrap();
+    for state in ["ready", "processing", "valid", "invalid"] {
+        sqlx::query("INSERT INTO clients(id,name,token_hash,scopes,created_at,managed) VALUES(?,?,?,'[]',0,1)").bind(state).bind(state).bind(security::hash(state)).execute(&db).await.unwrap();
+        sqlx::query("INSERT INTO acme_orders(id,account_id,domains,staging,state,fullchain,next_attempt,expires_at,created_at,updated_at) VALUES(?,'account','[\"home.example.com\"]',1,?,'saved-chain',0,9999999999,0,0)").bind(state).bind(state).execute(&db).await.unwrap();
+    }
+    sqlx::query("INSERT INTO providers(id,name,driver,zone,credentials,created_at) VALUES('provider','Fixture','dns_test','example.com',X'00',0)").execute(&db).await.unwrap();
+    sqlx::query("INSERT INTO challenges(id,client_id,provider_id,credentials_snapshot,fqdn,value,state,operation,next_attempt,expires_at,created_at,updated_at) VALUES('legacy-dns','processing','provider',X'00','_acme-challenge.home.example.com','value','active','present',0,9999999999,0,0)").execute(&db).await.unwrap();
+    sqlx::raw_sql(include_str!(
+        "../../migrations/0005_http01_verification.sql"
+    ))
+    .execute(&db)
+    .await
+    .unwrap();
+    for id in ["ready", "processing", "invalid"] {
+        assert_eq!(
+            sqlx::query_scalar::<_, String>("SELECT state FROM acme_orders WHERE id=?")
+                .bind(id)
+                .fetch_one(&db)
+                .await
+                .unwrap(),
+            "invalid"
+        );
+    }
+    assert_eq!(
+        sqlx::query_scalar::<_, String>("SELECT state FROM acme_orders WHERE id='valid'")
+            .fetch_one(&db)
+            .await
+            .unwrap(),
+        "valid"
+    );
+    assert_eq!(
+        sqlx::query_scalar::<_, String>("SELECT fullchain FROM acme_orders WHERE id='valid'")
+            .fetch_one(&db)
+            .await
+            .unwrap(),
+        "saved-chain"
+    );
+    assert_eq!(
+        sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM acme_authorizations")
+            .fetch_one(&db)
+            .await
+            .unwrap(),
+        0
+    );
+    assert_eq!(
+        sqlx::query_scalar::<_, String>("SELECT state FROM challenges WHERE id='legacy-dns'")
+            .fetch_one(&db)
+            .await
+            .unwrap(),
+        "cleanup_pending"
+    );
+}
+
 #[tokio::test]
 #[ignore = "requires Certbot; set ACMEPROXY_CERTBOT to the executable"]
-async fn real_certbot_issues_and_renews_without_dns_plugins() {
+async fn real_certbot_issues_and_renews_through_http01_without_dns_plugins() {
     let executable = std::env::var("ACMEPROXY_CERTBOT").unwrap_or_else(|_| "certbot".into());
     let mut fixture = Fixture::new().await;
     let resolver = fixture.resolver().await;
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let origin = format!("http://{}", listener.local_addr().unwrap());
-    configure(&fixture.app, Mode::TrustedNetwork, &origin).await;
+    configure(&fixture.app, Mode::Http01, &origin).await;
     let router = api::router(fixture.app.clone())
         .into_make_service_with_connect_info::<std::net::SocketAddr>();
     fixture.tasks.push(tokio::spawn(async move {
@@ -602,8 +1232,18 @@ async fn real_certbot_issues_and_renews_without_dns_plugins() {
             tokio::time::sleep(Duration::from_millis(50)).await;
         }
     }));
+    let http_listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let http_address = http_listener.local_addr().unwrap();
+    drop(http_listener);
+    let validation_app = fixture.app.clone();
+    fixture.tasks.push(tokio::spawn(async move {
+        loop {
+            validate_http(&validation_app, http_address).await;
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
+    }));
     let root = fixture.directory.path().join("certbot");
-    let run = |args: Vec<String>| {
+    let run = |args: Vec<String>, expected_success: bool| {
         let executable = executable.clone();
         let root = root.clone();
         async move {
@@ -626,28 +1266,33 @@ async fn real_certbot_issues_and_renews_without_dns_plugins() {
             .await
             .unwrap()
             .unwrap();
-            assert!(
+            assert_eq!(
                 result.status.success(),
-                "Certbot failed:\n{}\n{}",
+                expected_success,
+                "Unexpected Certbot result:\n{}\n{}",
                 String::from_utf8_lossy(&result.stdout),
                 String::from_utf8_lossy(&result.stderr)
             );
+            result
         }
     };
-    run(vec![
-        "certonly".into(),
-        "--standalone".into(),
-        "--server".into(),
-        format!("{origin}/acme/directory"),
-        "--cert-name".into(),
-        "endpoint-test".into(),
-        "-d".into(),
-        "example.com".into(),
-        "-d".into(),
-        "*.example.com".into(),
-        "--issuance-timeout".into(),
-        "45".into(),
-    ])
+    run(
+        vec![
+            "certonly".into(),
+            "--standalone".into(),
+            "--server".into(),
+            format!("{origin}/acme/directory"),
+            "--cert-name".into(),
+            "endpoint-test".into(),
+            "-d".into(),
+            "example.com".into(),
+            "--http-01-port".into(),
+            http_address.port().to_string(),
+            "--issuance-timeout".into(),
+            "45".into(),
+        ],
+        true,
+    )
     .await;
     let live = root.join("config/live/endpoint-test");
     let first = std::fs::read_to_string(live.join("fullchain.pem")).unwrap();
@@ -656,11 +1301,14 @@ async fn real_certbot_issues_and_renews_without_dns_plugins() {
             .unwrap()
             .contains("PRIVATE KEY")
     );
-    run(vec![
-        "renew".into(),
-        "--force-renewal".into(),
-        "--no-random-sleep-on-renew".into(),
-    ])
+    run(
+        vec![
+            "renew".into(),
+            "--force-renewal".into(),
+            "--no-random-sleep-on-renew".into(),
+        ],
+        true,
+    )
     .await;
     assert_ne!(
         first,
@@ -678,5 +1326,66 @@ async fn real_certbot_issues_and_renews_without_dns_plugins() {
             .await
             .unwrap(),
         0
+    );
+    assert_eq!(
+        sqlx::query_scalar::<_, i64>(
+            "SELECT COUNT(*) FROM acme_authorizations WHERE state='valid'"
+        )
+        .fetch_one(&fixture.app.db)
+        .await
+        .unwrap(),
+        2
+    );
+    for (domain, preference) in [("example.com", "dns"), ("*.example.com", "http")] {
+        let result = run(
+            vec![
+                "certonly".into(),
+                "--manual".into(),
+                "--manual-auth-hook".into(),
+                "true".into(),
+                "--server".into(),
+                format!("{origin}/acme/directory"),
+                "--cert-name".into(),
+                "unsupported-test".into(),
+                "--preferred-challenges".into(),
+                preference.into(),
+                "-d".into(),
+                domain.into(),
+                "--http-01-port".into(),
+                http_address.port().to_string(),
+            ],
+            false,
+        )
+        .await;
+        let error = String::from_utf8_lossy(&result.stderr);
+        if domain.starts_with("*.") {
+            assert!(
+                error.contains("Wildcard certificates are unsupported"),
+                "{error}"
+            );
+        } else {
+            assert!(
+                error.contains("does not support any combination of challenges"),
+                "{error}"
+            );
+            assert_eq!(
+                sqlx::query_scalar::<_, i64>(
+                    "SELECT COUNT(*) FROM acme_orders WHERE state='pending'"
+                )
+                .fetch_one(&fixture.app.db)
+                .await
+                .unwrap(),
+                1,
+                "the DNS-only client must reach the HTTP-only server's authorizations"
+            );
+        }
+    }
+    assert_eq!(
+        upstream.state.lock().unwrap().orders.len(),
+        2,
+        "unsupported requests must not reach the upstream CA"
+    );
+    println!(
+        "Certbot CLI: HTTP-01 issuance and forced renewal passed; DNS-only and wildcard requests rejected; private keys stayed client-side."
     );
 }

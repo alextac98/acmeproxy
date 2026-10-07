@@ -7,6 +7,23 @@ manager with a small admin UI. Configure DNS API credentials once, then request 
 validation, issuance, cleanup, and renewal run automatically. You can also issue revocable,
 domain-scoped gateway credentials to services that manage their own certificates and keys.
 
+## Three ways to obtain a certificate
+
+1. **DNS proxy:** your ACME client obtains the certificate directly from Let's Encrypt.
+   It uses an Acme Proxy client ID/token to ask this server to publish and clean up
+   DNS-01 records. Your client keeps its private key and handles renewal.
+2. **Managed certificates:** request through the authenticated **Certificates** UI or
+   admin API. Acme Proxy generates and stores the private key, obtains the certificate,
+   and renews it automatically. Download the key/chain and install them on your service.
+3. **HTTP-01 ACME endpoint:** point an ordinary HTTP-01-capable client at our ACME
+   directory URL. The client proves control of every hostname through HTTP-01; Acme Proxy
+   then obtains a Let's Encrypt certificate using its DNS credentials. No gateway token
+   or account approval is needed. The client keeps its private key and handles renewal;
+   Acme Proxy stores the certificate chain for download, never the client's private key.
+
+All three require configured DNS provider coverage for the requested domains. Wildcards
+work through the DNS proxy and managed certificates; the HTTP-01 endpoint rejects them.
+
 **Development preview.** The gateway and worker lifecycle are tested with a local fake
 DNS provider. The catalog contains 184 available acme.sh adapters; those providers have
 not been live-verified here. Read the [architecture and rollout plan](docs/PLAN.md) for
@@ -119,11 +136,16 @@ before reducing it. This is the application audit log, not raw server stdout.
 
 ## Internal ACME endpoint (Certbot and other ACME clients)
 
-Open **Settings** to enable a **Trusted network** or **Approved ACME accounts** endpoint.
+Open **Settings** to enable **HTTP-01 verification**.
 Point clients at `http://YOUR-SERVER:8080/acme/directory` (use an HTTPS reverse proxy for
 clients that require TLS). Configure DNS credentials once on this server; clients keep
 their own keys and use standard ACME issuance and renewal, with no DNS plugin, gateway
-token, or manual challenge. Allowed networks and optional domain scopes control access.
+token, account approval, or manual TXT records. The client's hostname must resolve to an
+HTTP-01 responder reachable from Acme Proxy on port 80. For internal services, configure
+**Private HTTP-01 destination networks** as well as the allowed client networks.
+Every hostname must pass HTTP-01; network membership alone never authorizes issuance.
+Optional domain scopes further restrict eligible names. Only HTTP-01 is offered;
+clients restricted to DNS-01 or TLS-ALPN-01 cannot use this endpoint.
 The endpoint starts disabled and defaults to Let's Encrypt staging when enabled.
 
 [ACME setup, Certbot, Home Assistant, and protocol details](docs/ACME.md)

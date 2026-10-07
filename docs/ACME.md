@@ -1,87 +1,86 @@
-# Internal ACME endpoint
+# HTTP-01 ACME endpoint
 
-ACME Proxy can expose an ACME directory to Certbot and other ACME clients. The client
-creates its account key and certificate private key locally, sends a signed order and
-CSR, and receives a Let's Encrypt certificate. The operator configures DNS access once;
-clients do not need provider credentials, gateway client IDs/tokens, a DNS plugin, or
-manual TXT records. Client renewal timers request replacement certificates the same way.
+Acme Proxy exposes a standard ACME directory to Certbot and other clients that support
+custom ACME servers and HTTP-01. The client creates its account key and certificate
+private key locally, proves control of each hostname through HTTP-01, sends a signed CSR,
+and receives a Let's Encrypt certificate. Acme Proxy handles upstream DNS-01 using the
+operator's configured DNS credentials. Clients need no gateway token, DNS plugin, or
+operator account approval. Their normal renewal timers repeat the same verified flow.
 
-This is separate from **Certificates**, where this server generates and stores private
-keys, and **Clients**, which grants external ACME clients access to the DNS gateway only.
-For ordinary ACME clients, use the directory URL from **Settings**.
+This is one of three certificate workflows. The authenticated **DNS gateway** lets an
+external client obtain certificates directly from its CA, using `/present` and `/cleanup`
+to publish DNS-01 records. **Managed Certificates** lets an administrator request a
+certificate through the UI/API; this server generates/stores its private key and renews
+it automatically. Those two workflows also support wildcards. This endpoint supports
+individual DNS hostnames only and never receives a client's certificate private key.
 
 ## Operator setup
 
 1. Configure DNS provider connections for the zones you want to issue certificates for.
-2. Open **Settings → ACME endpoint** and select an access mode:
-   - **Disabled**: no downstream ACME service (the default).
-   - **Trusted network**: clients from allowed network CIDRs may request allowed domains.
-     Accounts are created automatically, with no individual operator approval.
-   - **Approved ACME accounts**: the same network restrictions apply, but each automatically
-     registered ACME account must also be approved in Settings before ordering certificates.
-     Register using `certbot register --server <directory URL> --agree-tos --email <email>`,
-     approve the account, then issue. A first issuance attempt also registers an account
-     before reporting that approval is required; rerun it after approval.
-3. Set the server URL as clients will see it, for example `http://10.13.1.240:8080` or
-   `https://acme.internal.example.com`. Use an origin without a path or query.
-4. Set the allowed client CIDRs, for example `10.13.1.0/24`. Defaults cover loopback and
-   private LAN ranges. These checks use the TCP peer; forwarded headers cannot bypass them.
-   Behind a reverse proxy, restrict ingress at the proxy too, because the app sees its IP.
-5. Optionally limit allowed certificate domains. Empty means all names covered by configured
-   DNS providers. `ha.example.com` allows that exact certificate, not `*.ha.example.com`.
-   `*.example.com` permits descendants and descendant wildcard certificates, but not
-   `example.com` itself. Include both the apex and wildcard scope when both are wanted.
-6. Select Let's Encrypt **staging** first, accept the subscriber agreement, and save.
-   Settings take effect immediately. Staging certificates are not browser trusted.
-   Once tested, select production. Each existing order retains its original environment.
+2. Open **Settings → ACME endpoint** and select **HTTP-01 verification**. The endpoint
+   starts **Disabled**; disabling it does not disable the DNS gateway or managed certificates.
+3. Set the server URL as clients will see it, for example `https://acme.internal.example.com`.
+   Use an origin without a path/query. Terminate HTTPS at your reverse proxy. HTTP origins
+   are accepted for local testing, but many clients require HTTPS.
+4. Set allowed client network CIDRs. Defaults cover loopback/private LAN ranges. Checks
+   use the TCP peer, so forwarded headers cannot bypass them. Behind a reverse proxy,
+   also restrict ingress there because the app sees the proxy's IP. These restrictions
+   allow clients to attempt validation; they never bypass HTTP-01.
+5. For private HTTP responders, add their network CIDRs to **Private HTTP-01 destination
+   networks**, for example `10.13.1.0/24`. Empty permits public destinations only. Client
+   networks and validation destination networks are separate policies. Loopback may be
+   explicitly granted for local deployments; link-local, metadata, multicast, unspecified,
+   and IPv4 transition/tunnel destinations are blocked even with broad network grants.
+6. Optionally limit allowed certificate domains. Empty permits names covered by configured
+   DNS providers. `ha.example.com` permits only that hostname; `*.example.com` permits
+   individual descendant hostnames, excluding `example.com`. A wildcard **scope** does not
+   enable wildcard **certificates**.
+7. Select Let's Encrypt **staging** first, accept the subscriber agreement, and save.
+   Once tested, select production. Existing orders keep their original environment.
 
-Trusted-network mode is deliberately an issuance permission: a client in those networks
-can obtain certificates for any domain allowed by that policy. It does not separately
-prove that the client controls the domain. Our server performs real DNS-01 validation
-with Let's Encrypt using the operator's credentials. Downstream authorizations are
-already valid under the local policy, so no challenge is presented to the client.
-
-ACME clients still use standard account keys, JWS signatures, and single-use nonces.
-These are automatically managed by the client; there is no separately issued password.
-The admin UI and DNS gateway retain their existing authentication.
+A hostname must resolve, from Acme Proxy, to the client's HTTP-01 responder on port 80.
+Split DNS can point it at a private service; inbound access from the public Internet is
+unnecessary because Let's Encrypt validates upstream through DNS-01. Protect the proxy's
+DNS resolver and routing: someone who can redirect its validation requests can attack
+local hostname verification, while our upstream DNS credentials still satisfy the CA.
 
 ## Certbot
 
-Copy the directory URL from Settings. For the current development listener:
+Copy the directory URL from Settings:
 
 ```sh
 certbot certonly --standalone --non-interactive --agree-tos \
-  --server http://10.13.1.240:8080/acme/directory \
+  --server https://acme.internal.example.com/acme/directory \
   --email you@example.com -d ha.example.com \
   --issuance-timeout 1200
 ```
 
-Replace the domain and email. Wildcards work too: add `-d '*.example.com'` with shell
-quoting. The standalone plugin is selected, but it does not bind a challenge listener
-when the server returns valid authorizations. No inbound challenge ports are needed.
+The standalone plugin now actually binds port 80 and serves the challenge. That port
+must be free and reachable from Acme Proxy. If a web server already owns port 80, use
+Certbot's webroot/web-server integration and route `/.well-known/acme-challenge/` to it.
+The certificate hostname should resolve to the challenge responder, not automatically
+to the Acme Proxy directory server.
 
-Certbot saves its certificate/private key and renewal configuration locally. Keep its
-normal renewal timer enabled:
+Certbot saves the certificate/private key and renewal settings locally. Keep its usual
+renewal timer enabled:
 
 ```sh
 certbot renew
 ```
 
-Use the client's installation/deploy hook to reload the consuming service after renewal.
-The gateway does not store the client's certificate private key and does not schedule
-renewals for downstream clients. Choose staging or production in the gateway settings;
-changing settings affects new orders. Do not request duplicate certificates through the
-managed Certificates page for the same client workflow.
+Use deployment hooks to reload the consuming service. Acme Proxy stores the resulting
+certificate chain for authenticated ACME download and recovery; it does not receive
+client private keys or schedule client renewals. Avoid duplicate managed requests for
+the same workflow.
 
-Certbot 5.8.0 has been tested over HTTP against a local instance. Many other ACME clients
-require HTTPS; terminate TLS at a reverse proxy and configure the matching HTTPS origin
-for those clients. Changing the advertised origin changes account/resource URLs; point
-clients at the new directory and let them register against that endpoint again.
+Only `http-01` is offered. Clients configured exclusively for `dns-01` or `tls-alpn-01`
+will report that no compatible challenge is available. Wildcard orders return the ACME
+`rejectedIdentifier` error with an explanation; unsupported identifier types such as
+IP addresses return `unsupportedIdentifier`. There is no trusted-issuance fallback.
 
 ## Home Assistant OS
 
-The official Let's Encrypt app supports a custom `acme_server`. A configuration matching
-this endpoint's preauthorized order flow is:
+The official Let's Encrypt app supports a custom `acme_server`:
 
 ```yaml
 email: you@example.com
@@ -91,62 +90,94 @@ certfile: fullchain.pem
 keyfile: privkey.pem
 challenge: http
 dns: {}
-acme_server: http://10.13.1.240:8080/acme/directory
+acme_server: https://acme.internal.example.com/acme/directory
 ```
 
-Here `challenge: http` selects the app's ordinary standalone Certbot flow; the gateway
-returns valid downstream authorizations and handles upstream DNS-01, so the client does
-not perform an HTTP challenge. Do not configure `dns-httpreq`, a provider token, or a
-client ID for this flow. Configure allowed networks for the address the HA host uses.
+Here `challenge: http` performs real HTTP-01. The app's port 80 responder must be reachable
+from Acme Proxy, with the hostname resolving to it and its private network explicitly
+allowed for validation. No DNS provider token, `dns-httpreq`, or gateway client ID is needed.
+Schedule the app's renewal runs and reload HA or its TLS proxy after renewal. See the
+[official app documentation](https://github.com/home-assistant/addons/blob/master/letsencrypt/DOCS.md).
+The actual Certbot flow is tested locally; the HA app itself has not been tested.
 
-Start the app to issue, and schedule its periodic starts for renewal. Configure HA or
-its TLS proxy to load the resulting `/ssl/fullchain.pem` and `/ssl/privkey.pem`, and
-reload/restart that TLS consumer after renewal. See the [official app documentation](https://github.com/home-assistant/addons/blob/master/letsencrypt/DOCS.md).
-The equivalent Certbot flow is tested locally; the HA app itself has not been tested.
+## Verification and operational scope
 
-## Protocol and operational scope
+- Orders start `pending`. Each hostname has its own random HTTP-01 token and durable
+  authorization. A signed acknowledgement binds the expected response to the requesting
+  account key. Only after **every** authorization succeeds does an order become `ready`.
+  Finalization and each upstream worker phase enforce verified authorization again.
+- The validator requests the standard challenge path on port 80, using the requested
+  hostname as Host. DNS answers are checked and pinned for the entire request/redirect
+  chain, including IPv4-mapped IPv6 handling. System HTTP proxy settings are ignored.
+- Redirects are limited to ten and must preserve the hostname and challenge path, using
+  HTTP port 80 or HTTPS port 443 without credentials, query, or fragment. Cross-host/path
+  redirects are unsupported. Like Let's Encrypt, HTTPS challenge redirects can bootstrap
+  through an expired/self-signed certificate. Responses must be HTTP 200 and match the
+  full token/account-thumbprint, ignoring trailing whitespace. Bodies are limited to
+  4096 bytes and never reflected in error messages.
+- Each validation attempt is bounded to 30 seconds and retries up to three times with
+  ten seconds between attempts. Duplicate acknowledgements do not reset attempts or
+  generate more requests. The separate validation worker resumes persisted jobs after
+  restart and does not wait for slow upstream certificate issuance.
+- Disabled issuance, deactivated accounts, expired orders, domain-policy changes, and
+  lost provider coverage prevent validation/finalization/issuance. Validation destination
+  changes during a request invalidate its result. Account key rollover preserves identity;
+  an acknowledged challenge retains its original account-bound response.
+- Accounts use standard ES256 or RS256 JWS signatures and single-use nonces. CSRs must
+  have valid signatures and DNS SANs exactly matching the order; returned certificates
+  must match the CSR public key and names. Account/order/challenge/download access is
+  isolated by account ownership. Revocation accepts the issuing downstream account or
+  the certificate's supported matching key and uses our issuing upstream account.
+- Directory, account management/order lists, key rollover, authorizations/challenges,
+  finalization, download, and upstream revocation are implemented. ARI, EAB, IP identifiers,
+  custom validity dates, and other downstream challenge types are not implemented.
+- Orders expire after 24 hours. Limits remain 100 outstanding orders (including unverified
+  orders), 20 new orders per account/hour, 100 globally/hour, and 1000 registered accounts.
+  Nonces expire after five minutes and their store is capped at 10000 entries.
+- Upstream issuance uses the existing durable DNS journal and exact-value cleanup.
+  Attempts are bounded to 20 minutes and retry up to three times. CSRs, upstream order
+  URLs, and issued chains are persisted in SQLite for recovery. Our upstream account
+  key is encrypted with `master.key`; no downstream certificate private key is sent.
+- Account/order/authorization history currently has no automatic pruning. Live Let's
+  Encrypt/provider verification remains a deployment check. This is a self-hosted
+  service for configured DNS zones, not issuance for arbitrary domains.
 
-- Directory, nonces, account registration/lookup/update/deactivation, account order lists,
-  new orders, authorizations, finalization, certificate download, account key rollover,
-  and upstream certificate revocation are implemented.
-- Account signatures support ES256 (P-256) and RS256 (RSA 2048–8192). CSRs must have valid
-  signatures and DNS SANs matching the order exactly. The issued certificate must match
-  both the CSR public key and the requested names before it is returned.
-- Certificate revocation accepts the issuing downstream account or the certificate's
-  matching supported JWK. The upstream request uses our account that issued the certificate.
-- ACME accounts and certificates are isolated by account ownership. Removed approval,
-  disabled issuance, deactivated accounts, domain-policy changes and missing provider
-  coverage block subsequent processing/finalization. Account key rollover preserves the
-  approved account identity. Settings saves do not overwrite concurrent approvals.
-- Orders expire after 24 hours before issuance. At most 100 outstanding orders, 20 new
-  orders per account/hour, 100 new orders globally/hour and 1000 registered accounts are
-  allowed. Nonces expire after five minutes and their store is capped at 10000 entries.
-- Issuance uses the existing durable DNS journal, credential snapshots and exact-value
-  cleanup. An attempt is bounded to 20 minutes; failed orders retry up to three times
-  before becoming invalid. The client's issuance timeout should allow time for DNS
-  propagation and a queue of other requests. Failed cleanup remains visible for operators.
-- CSRs, upstream order URLs and certificate chains are persisted in SQLite so interrupted
-  issuance can resume without changing the client's key. Only our upstream ACME account
-  key is held by the server, encrypted using `master.key`. No client private key is sent.
-- Account/order history is retained in SQLite; there is currently no automatic history
-  pruning. ARI, EAB, IP identifiers, custom validity periods and public client challenge
-  validation are not implemented. This endpoint is intended for operator-authorized
-  internal issuance, not a publicly accessible CA or a general transparent ACME proxy.
-- Live Let's Encrypt and real-provider verification remain deployment/release checks.
-  The existing provider at-least-once mutation limitations also apply here.
+## Upgrading from trusted issuance
 
-## Verification
+Legacy `trusted_network` and `approved_accounts` configuration values become `http01`.
+Approvals no longer grant issuance permission. Issued certificates remain downloadable;
+unissued legacy orders become invalid and their DNS cleanup is queued. Create fresh
+orders and configure reachable HTTP-01 responders, including explicit private destination
+networks. Existing DNS gateway clients and managed certificates keep their behavior.
 
-The Rust suite covers account isolation, signature/nonce/URL checks, network and domain
-policy, approval changes, CSR identity/signature checks, key rollover, upstream DNS-01,
-cleanup, and resuming after upstream finalization. Browser tests exercise saving settings,
-account approval, persisted values, preserving unsaved changes, and the mobile layout.
+## Tests
 
-An optional test runs the actual Certbot CLI through registration, wildcard/apex issuance
-and renewal, against the HTTP endpoint, with a simulated upstream CA and local DNS server:
+The Rust suite exercises actual HTTP validation, per-hostname/account binding, early
+finalization and worker bypass rejection, wildcard/identifier rejection, address/redirect
+restrictions, failure/retry/expiry/restart behavior, migration, JWS/nonce/CSR checks,
+upstream DNS-01, cleanup, private-key separation, and certificate download recovery.
+Browser tests cover HTTP-01 settings, private destination policy, registered accounts,
+persistence, unsaved edits, and mobile layout. Existing suites cover authenticated DNS
+gateway operations and managed issuance/renewal/downloads.
+
+An optional real Certbot test issues and renews through HTTP-01 against a simulated
+upstream CA and local challenge responder:
 
 ```sh
 ACMEPROXY_CERTBOT=/path/to/certbot cargo test real_certbot_issues_and_renews -- --ignored
 ```
 
-The fixture uses temporary directories and never contacts Let's Encrypt or a real DNS API.
+The fixture maps the HTTP challenge hostname to an isolated unprivileged test listener;
+production validation always starts on port 80. Tests never contact Let's Encrypt or a
+real DNS provider.
+
+The shipping server's independent validation worker can also be tested with real Docker
+DNS and a port 80 HTTP responder. This requires Docker and Python's `cryptography` package
+(included with Certbot):
+
+```sh
+python scripts/smoke-http01.py --image acmeproxy:your-test-image
+```
+
+This uses disposable containers/networks/volumes and never finalizes a CSR, so it makes no
+upstream CA or DNS provider request. It checks successful proof and private-network denial.

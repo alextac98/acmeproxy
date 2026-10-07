@@ -158,7 +158,7 @@ where
             app.healthy.load(std::sync::atomic::Ordering::SeqCst),
             "configuration needs restart"
         );
-        sqlx::query("UPDATE acme_orders SET state='invalid',error='Order expired',updated_at=? WHERE state IN ('ready','processing') AND expires_at<=?").bind(now()).bind(now()).execute(&app.db).await?;
+        sqlx::query("UPDATE acme_orders SET state='invalid',error='Order expired',updated_at=? WHERE state IN ('pending','ready','processing') AND expires_at<=?").bind(now()).bind(now()).execute(&app.db).await?;
         // Cleanup remains durable even when an order expires during downtime.
         sqlx::query("UPDATE challenges SET state='cleanup_pending',operation='cleanup',attempts=0,next_attempt=?,updated_at=? WHERE client_id IN (SELECT id FROM acme_orders WHERE state IN ('invalid','valid')) AND state IN ('active','present_pending')")
             .bind(now()).bind(now()).execute(&app.db).await?;

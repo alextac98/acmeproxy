@@ -14,15 +14,17 @@ jobs:
         with:
           toolchain: 1.98.1
           components: rustfmt, clippy
-      - name: Install release tooling
+      - name: Install test tooling
         run: |
           python3 -m venv "$RUNNER_TEMP/release-venv"
-          "$RUNNER_TEMP/release-venv/bin/python" -m pip install -r scripts/requirements-release.txt
+          "$RUNNER_TEMP/release-venv/bin/python" -m pip install -r scripts/requirements-release.txt 'certbot==5.8.0'
           echo "$RUNNER_TEMP/release-venv/bin" >> "$GITHUB_PATH"
       - run: python3 -m unittest discover -s tests/release -v
       - run: cargo fmt --check
       - run: cargo clippy --locked --all-targets -- -D warnings
       - run: cargo test --locked
+      - name: Verify real Certbot HTTP-01 issuance, renewal, and unsupported requests
+        run: ACMEPROXY_CERTBOT=certbot cargo test --locked real_certbot_issues_and_renews -- --ignored
       - run: sh scripts/install-dnsapi.sh
       - run: cargo test --locked --test dnsapi -- --ignored
       - run: cargo build --locked
@@ -48,3 +50,8 @@ jobs:
           cache-from: type=gha,scope=ci-container
           cache-to: type=gha,scope=ci-container,mode=max
       - run: python3 scripts/smoke-compose.py --image acmeproxy:ci
+      - name: Verify production HTTP-01 worker on port 80
+        run: |
+          python3 -m venv "$RUNNER_TEMP/http01-venv"
+          "$RUNNER_TEMP/http01-venv/bin/python" -m pip install cryptography
+          "$RUNNER_TEMP/http01-venv/bin/python" scripts/smoke-http01.py --image acmeproxy:ci
