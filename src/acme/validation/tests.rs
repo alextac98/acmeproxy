@@ -92,6 +92,21 @@ fn public_private_mapped_and_metadata_destination_policy() {
 }
 
 #[test]
+fn google_ipv6_metadata_cannot_be_allowed_by_network_grants() {
+    let metadata = "fd20:ce::254".parse().unwrap();
+    for network in ["fc00::/7", "fd20:ce::/64", "fd20:ce::254/128", "::/0"] {
+        let settings = Settings {
+            validation_networks: vec![network.into()],
+            ..Default::default()
+        };
+        assert!(
+            !accepts_address(&settings, metadata),
+            "Google metadata must stay blocked even with a {network} grant"
+        );
+    }
+}
+
+#[test]
 fn redirects_keep_hostname_path_and_standard_ports() {
     let path = "/.well-known/acme-challenge/token";
     let current = url::Url::parse(&format!("http://service.example.com{path}")).unwrap();

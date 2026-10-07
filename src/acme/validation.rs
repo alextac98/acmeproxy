@@ -40,7 +40,8 @@ fn accepts_address(settings: &Settings, address: IpAddr) -> bool {
             if ip.is_unspecified()
                 || ip.is_multicast()
                 || ip.is_unicast_link_local()
-                || ip == "fd00:ec2::254".parse::<std::net::Ipv6Addr>().unwrap() =>
+                || ip == "fd00:ec2::254".parse::<std::net::Ipv6Addr>().unwrap()
+                || ip == "fd20:ce::254".parse::<std::net::Ipv6Addr>().unwrap() =>
         {
             return false;
         }
