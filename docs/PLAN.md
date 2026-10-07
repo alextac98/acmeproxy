@@ -70,16 +70,21 @@ sequenceDiagram
 
 See [ACME endpoint design, setup and verification](ACME.md). This is the primary flow
 for clients such as Certbot: the client owns its account key, certificate key, installation
-and renewal timer. The gateway presents an ACME directory and automatically authorizes
-covered names according to a trusted-network or approved-account policy, then submits
-the client's verified CSR to Let's Encrypt using the same durable DNS worker.
+and renewal timer. The gateway presents an ACME directory and requires account-bound
+HTTP-01 proof for every covered hostname, then submits the client's verified CSR to
+Let's Encrypt using the same durable DNS worker. Wildcard orders are rejected on this
+endpoint. The authenticated DNS gateway and managed certificates retain DNS-01 support.
 
-The endpoint is disabled by default. Settings and account approvals are persisted in
-TOML; registered account public keys, single-use nonces, orders, CSRs and issued chains
+The endpoint is disabled by default. Settings are persisted in TOML; registered account
+public keys, single-use nonces, HTTP-01 authorizations, orders, CSRs and issued chains
 are runtime state in SQLite. There is no client certificate private key on this path.
 An order pins its upstream staging/production choice. The existing serial issuance
 worker processes both managed certificates and downstream ACME jobs, so upstream account
 creation and provider mutations preserve the single-process recovery assumptions.
+HTTP-01 validation runs in a separate durable worker so slow upstream DNS propagation
+does not delay challenge verification. Destinations are resolved once and pinned;
+non-public destinations require explicit network grants, and redirects are restricted
+to the same hostname/challenge path on ports 80/443.
 
 ## Managed certificate lifecycle
 

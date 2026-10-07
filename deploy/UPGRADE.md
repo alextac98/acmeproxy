@@ -44,3 +44,13 @@ An older image may not understand an upgraded database. Restore the backup with 
    ```
 
 Sign in with the backed-up token. Restoring loses changes made since the backup; check any DNS records changed during that time before resuming client traffic.
+
+## HTTP-01 ACME endpoint migration
+
+The ACME endpoint now requires HTTP-01 verification for every requested hostname.
+Legacy `trusted_network` and `approved_accounts` settings become `http01`; account
+approval no longer grants issuance permission. Existing issued chains remain available,
+but unissued legacy orders are invalidated. Clients must create fresh orders and answer
+HTTP-01 on port 80. Configure `acme.validation_networks` for private challenge responders.
+Wildcard orders are rejected on this endpoint. The authenticated DNS gateway and managed
+certificate UI/API continue to use DNS-01 and support wildcards.

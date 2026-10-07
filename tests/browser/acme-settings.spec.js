@@ -1,7 +1,7 @@
 const { test, expect } = require('@playwright/test');
 const crypto = require('node:crypto');
 
-test('ACME settings persist, preserve unsaved edits, and approve registered accounts', async ({ page }) => {
+test('ACME settings persist, preserve unsaved edits, and require HTTP-01 without account approval', async ({ page }) => {
   const errors = [];
   page.on('pageerror', error => errors.push(error.message));
   await page.goto('/settings');
@@ -10,13 +10,14 @@ test('ACME settings persist, preserve unsaved edits, and approve registered acco
   await expect(page.getByRole('heading', { name: 'Settings', exact: true })).toBeVisible();
   await expect(page.getByLabel('Access mode')).toHaveValue('disabled');
   await expect(page.locator('#acme-base-url')).not.toHaveValue('');
-  await page.getByLabel('Access mode').selectOption('trusted_network');
+  await page.getByLabel('Access mode').selectOption('http01');
   await page.getByLabel('Allowed client networks').fill('not-a-network');
   await page.locator('#acme-terms').check();
   await page.getByRole('button', { name: 'Save ACME settings' }).click();
   await expect(page.locator('#acme-settings-error')).toContainText('CIDRs');
   await page.getByLabel('Allowed client networks').fill('127.0.0.1/32');
   await page.getByLabel('Allowed certificate domains (optional)').fill('example.com\n*.example.com');
+  await page.getByLabel('Private HTTP-01 destination networks (optional)').fill('10.13.1.0/24');
   await page.getByRole('button', { name: 'Save ACME settings' }).click();
   await expect(page.locator('#notice')).toHaveText('ACME settings saved.');
   await expect(page.locator('#acme-connection-status')).toContainText('Staging');
@@ -36,25 +37,25 @@ test('ACME settings persist, preserve unsaved edits, and approve registered acco
   const signature = crypto.sign('sha256', Buffer.from(`${header}.${payload}`), { key: privateKey, dsaEncoding: 'ieee-p1363' }).toString('base64url');
   const registration = await page.request.post(endpoints.newAccount, { headers: { 'content-type': 'application/jose+json' }, data: { protected: header, payload, signature } });
   expect(registration.status()).toBe(201);
-  await page.getByLabel('Access mode').selectOption('approved_accounts');
-  await page.getByRole('button', { name: 'Save ACME settings' }).click();
-  await expect(page.getByRole('button', { name: 'Approve', exact: true })).toBeVisible();
-  await page.getByRole('button', { name: 'Approve', exact: true }).click();
-  await expect(page.getByRole('button', { name: 'Remove approval', exact: true })).toBeVisible();
+  await page.locator('#acme-settings-refresh').click();
+  await expect(page.locator('#acme-account-list')).toContainText('HTTP-01 required for each order');
+  await expect(page.getByRole('button', { name: 'Approve', exact: true })).toHaveCount(0);
+  expect(await page.locator('#acme-mode option').evaluateAll(options => options.map(option => option.value))).toEqual(['disabled', 'http01']);
   await page.getByLabel('Allowed certificate domains (optional)').fill('unsaved.example.com');
   await page.locator('#acme-settings-refresh').click();
   await expect(page.getByLabel('Allowed certificate domains (optional)')).toHaveValue('unsaved.example.com');
   await page.reload();
   await page.getByLabel('Admin token', { exact: true }).fill('browser-test-admin-token-not-for-deployment');
   await page.getByRole('button', { name: 'Open administration' }).click();
-  await expect(page.getByLabel('Access mode')).toHaveValue('approved_accounts');
+  await expect(page.getByLabel('Access mode')).toHaveValue('http01');
   await expect(page.getByLabel('Allowed certificate domains (optional)')).toHaveValue('example.com\n*.example.com');
-  await expect(page.getByRole('button', { name: 'Remove approval', exact: true })).toBeVisible();
+  await expect(page.getByLabel('Private HTTP-01 destination networks (optional)')).toHaveValue('10.13.1.0/24');
+  await expect(page.locator('#acme-connection-status')).toContainText('HTTP-01 verification');
+  await page.screenshot({ path: 'test-results/acme-settings-desktop.png', fullPage: true });
   await page.setViewportSize({ width: 390, height: 844 });
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   await page.screenshot({ path: 'test-results/acme-settings-mobile.png', fullPage: true });
-  await page.getByRole('button', { name: 'Remove approval', exact: true }).click();
-  await expect(page.getByRole('button', { name: 'Approve', exact: true })).toBeVisible();
+
   await page.getByLabel('Access mode').selectOption('disabled');
   await page.getByRole('button', { name: 'Save ACME settings' }).click();
   await expect(page.locator('#acme-connection-status')).toContainText('enabled access mode');

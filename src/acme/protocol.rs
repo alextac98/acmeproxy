@@ -155,7 +155,7 @@ fn canonical_jwk(jwk: &Value) -> Result<Value> {
         )),
     }
 }
-fn thumbprint(jwk: &Value) -> String {
+pub(super) fn thumbprint(jwk: &Value) -> String {
     B64.encode(security::hash(&jwk.to_string()))
 }
 fn verify(jose: &Jose, protected: &Protected, jwk: &Value) -> Result<()> {
@@ -317,7 +317,7 @@ pub(super) async fn handle(
     response
         .headers_mut()
         .insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
-    response.headers_mut().insert(
+    response.headers_mut().append(
         header::LINK,
         HeaderValue::from_str(&format!("<{}>;rel=\"index\"", settings.url("directory"))).unwrap(),
     );
@@ -374,7 +374,7 @@ async fn account_response(
         Some(settings.url(&format!("account/{id}"))),
     ))
 }
-fn timestamp(value: i64) -> String {
+pub(super) fn timestamp(value: i64) -> String {
     time::OffsetDateTime::from_unix_timestamp(value)
         .unwrap()
         .format(&time::format_description::well_known::Rfc3339)
@@ -407,7 +407,7 @@ fn order_response(settings: &Settings, row: &SqliteRow, status: StatusCode) -> R
     response
 }
 async fn owned_order(app: &App, id: &str, account: &str) -> Result<SqliteRow> {
-    sqlx::query("UPDATE acme_orders SET state='invalid',error='Order expired',updated_at=? WHERE id=? AND account_id=? AND state IN ('ready','processing') AND expires_at<=?")
+    sqlx::query("UPDATE acme_orders SET state='invalid',error='Order expired',updated_at=? WHERE id=? AND account_id=? AND state IN ('pending','ready','processing') AND expires_at<=?")
         .bind(now()).bind(id).bind(account).bind(now()).execute(&app.db).await?;
     sqlx::query("SELECT * FROM acme_orders WHERE id=? AND account_id=?")
         .bind(id)
@@ -530,22 +530,74 @@ async fn dispatch(
         }
         "authz" => {
             post_as_get(&signed.payload)?;
-            let domains: Vec<String> = serde_json::from_str(row.get("domains"))
-                .map_err(|_| malformed("invalid stored domains"))?;
             let index: usize = parts
                 .get(2)
                 .and_then(|s| s.parse().ok())
                 .ok_or_else(missing)?;
-            let domain = domains.get(index).ok_or_else(missing)?;
-            let authorized = row.get::<String, _>("state") != "invalid"
-                && row.get::<i64, _>("expires_at") > now()
-                && settings.accepts_account(account)
-                && check_domains(app, settings, &domains).await.is_ok();
+            let authorization = load_authorization(app, id, index).await?;
+            let challenge = challenge_json(
+                settings,
+                &authorization,
+                row.get::<String, _>("state") == "invalid"
+                    || super::check_order_access(app, id).await.is_err(),
+            );
+            let status = match challenge["status"].as_str() {
+                Some("valid") => "valid",
+                Some("invalid") => "invalid",
+                _ => "pending",
+            };
             Ok(json_response(
                 StatusCode::OK,
-                json!({"status":if authorized {"valid"} else {"invalid"},"identifier":{"type":"dns","value":domain.strip_prefix("*.").unwrap_or(domain)},"wildcard":domain.starts_with("*."),"expires":timestamp(row.get("expires_at")),"challenges":[]}),
+                json!({"status":status,"identifier":{"type":"dns","value":authorization.get::<String,_>("domain")},"expires":timestamp(row.get("expires_at")),"challenges":[challenge]}),
                 None,
             ))
+        }
+        "challenge" => {
+            let index = parts
+                .get(2)
+                .and_then(|s| s.parse::<usize>().ok())
+                .ok_or_else(missing)?;
+            let _guard = app.mutation.lock().await;
+            let authorization = load_authorization(app, id, index).await?;
+            let invalid = row.get::<String, _>("state") == "invalid"
+                || super::check_order_access(app, id).await.is_err();
+            if !signed.payload.is_empty() {
+                if !payload(&signed.payload)?.is_object() {
+                    return Err(malformed("challenge response must be a JSON object"));
+                }
+                if invalid {
+                    return Err(denied("order expired or is no longer authorized"));
+                }
+                // Persist the account-bound response once. Duplicate acknowledgements
+                // neither reset attempts nor enqueue additional outbound requests.
+                let expected = format!(
+                    "{}.{}",
+                    authorization.get::<String, _>("token"),
+                    thumbprint(&signed.jwk)
+                );
+                sqlx::query("UPDATE acme_authorizations SET state='processing',key_authorization=?,next_attempt=? WHERE order_id=? AND identifier_index=? AND state='pending'")
+                    .bind(expected).bind(now()).bind(id).bind(index as i64).execute(&app.db).await?;
+            }
+            let authorization = load_authorization(app, id, index).await?;
+            let mut response = json_response(
+                StatusCode::OK,
+                challenge_json(settings, &authorization, invalid),
+                None,
+            );
+            response.headers_mut().insert(
+                header::LINK,
+                HeaderValue::from_str(&format!(
+                    "<{}>;rel=\"up\"",
+                    settings.url(&format!("authz/{id}/{index}"))
+                ))
+                .expect("validated authorization URL"),
+            );
+            if authorization.get::<String, _>("state") == "processing" {
+                response
+                    .headers_mut()
+                    .insert(header::RETRY_AFTER, HeaderValue::from_static("10"));
+            }
+            Ok(response)
         }
         "finalize" => finalize(app, settings, account, id, &signed.payload).await,
         "certificate" => {
@@ -565,6 +617,27 @@ async fn dispatch(
         }
         _ => Err(missing()),
     }
+}
+
+async fn load_authorization(app: &App, id: &str, index: usize) -> Result<SqliteRow> {
+    sqlx::query("SELECT * FROM acme_authorizations WHERE order_id=? AND identifier_index=?")
+        .bind(id)
+        .bind(index as i64)
+        .fetch_optional(&app.db)
+        .await?
+        .ok_or_else(missing)
+}
+fn challenge_json(settings: &Settings, row: &SqliteRow, invalid: bool) -> Value {
+    let mut value = json!({"type":"http-01","url":settings.url(&format!("challenge/{}/{}",row.get::<String,_>("order_id"),row.get::<i64,_>("identifier_index"))),"status":if invalid {"invalid"} else {row.get::<&str,_>("state")},"token":row.get::<String,_>("token")});
+    if !invalid && let Some(at) = row.get::<Option<i64>, _>("validated_at") {
+        value["validated"] = json!(timestamp(at));
+    }
+    if invalid && row.get::<String, _>("state") != "invalid" {
+        value["error"] = json!({"type":"urn:ietf:params:acme:error:unauthorized","detail":"Order expired or is no longer authorized"});
+    } else if let Some(error) = row.get::<Option<String>, _>("error") {
+        value["error"] = serde_json::from_str(&error).unwrap_or(Value::Null);
+    }
+    value
 }
 
 #[derive(Deserialize)]
@@ -607,6 +680,13 @@ async fn new_order(
             ));
         }
         let domain = security::scope(&identifier.value).map_err(malformed)?;
+        if domain.starts_with("*.") {
+            return Err(problem(
+                StatusCode::BAD_REQUEST,
+                "rejectedIdentifier",
+                "Wildcard certificates are unsupported by this HTTP-01 endpoint; request individual hostnames",
+            ));
+        }
         if domain.strip_prefix("*.").unwrap_or(&domain).len() + 15 > 253 {
             return Err(malformed("DNS challenge name is too long"));
         }
@@ -616,10 +696,8 @@ async fn new_order(
     domains.dedup();
     let _guard = app.mutation.lock().await;
     let settings = app.config.lock().await.value.acme.clone();
-    if !settings.accepts_account(account) {
-        return Err(denied(
-            "ACME account requires operator approval in Settings",
-        ));
+    if settings.mode != Mode::Http01 {
+        return Err(denied("HTTP-01 endpoint is disabled"));
     }
     check_domains(app, &settings, &domains).await.map_err(|_| {
         problem(
@@ -640,7 +718,7 @@ async fn new_order(
             .fetch_one(&app.db)
             .await?;
     let pending: i64 = sqlx::query_scalar(
-        "SELECT COUNT(*) FROM acme_orders WHERE state IN ('ready','processing') AND expires_at>?",
+        "SELECT COUNT(*) FROM acme_orders WHERE state IN ('pending','ready','processing') AND expires_at>?",
     )
     .bind(now())
     .fetch_one(&app.db)
@@ -653,7 +731,7 @@ async fn new_order(
         ));
     }
     let id = uuid::Uuid::new_v4().to_string();
-    let domains = serde_json::to_string(&domains).unwrap();
+    let domain_json = serde_json::to_string(&domains).unwrap();
     let mut tx = app.db.begin().await?;
     sqlx::query(
         "INSERT INTO clients(id,name,token_hash,scopes,created_at,managed) VALUES(?,?,?,?,?,1)",
@@ -661,12 +739,16 @@ async fn new_order(
     .bind(&id)
     .bind(format!("ACME order {id}"))
     .bind(security::hash(&security::random_secret()))
-    .bind(&domains)
+    .bind(&domain_json)
     .bind(now())
     .execute(&mut *tx)
     .await?;
-    sqlx::query("INSERT INTO acme_orders(id,account_id,domains,staging,next_attempt,expires_at,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?)").bind(&id).bind(account).bind(domains).bind(settings.staging).bind(now()).bind(now()+86400).bind(now()).bind(now()).execute(&mut *tx).await?;
-    sqlx::query("INSERT INTO audit(at,actor,action,target,outcome) VALUES(?,?,'acme.order_created',?,'ready')").bind(now()).bind(account).bind(&id).execute(&mut *tx).await?;
+    sqlx::query("INSERT INTO acme_orders(id,account_id,domains,staging,next_attempt,expires_at,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?)").bind(&id).bind(account).bind(domain_json).bind(settings.staging).bind(now()).bind(now()+86400).bind(now()).bind(now()).execute(&mut *tx).await?;
+    for (index, domain) in domains.iter().enumerate() {
+        sqlx::query("INSERT INTO acme_authorizations(order_id,identifier_index,domain,token,next_attempt) VALUES(?,?,?,?,?)")
+            .bind(&id).bind(index as i64).bind(domain).bind(security::random_secret()).bind(now()).execute(&mut *tx).await?;
+    }
+    sqlx::query("INSERT INTO audit(at,actor,action,target,outcome) VALUES(?,?,'acme.order_created',?,'pending')").bind(now()).bind(account).bind(&id).execute(&mut *tx).await?;
     tx.commit().await?;
     Ok(order_response(
         &settings,
@@ -735,6 +817,13 @@ async fn finalize(
     )?;
     let _guard = app.mutation.lock().await;
     let row = owned_order(app, id, account).await?;
+    if row.get::<String, _>("state") == "pending" {
+        return Err(problem(
+            StatusCode::FORBIDDEN,
+            "orderNotReady",
+            "Complete HTTP-01 verification for every requested hostname before finalizing",
+        ));
+    }
     super::check_order_policy(app, id)
         .await
         .map_err(|_| denied("order is no longer authorized"))?;

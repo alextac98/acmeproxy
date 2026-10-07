@@ -859,7 +859,7 @@ async function refreshCertificates() {
 let acmeSettingsDirty = false, acmeSettingsData = null;
 function acmeModeHelp() {
   const mode = $("acme-mode").value;
-  $("acme-mode-help").textContent = mode === "disabled" ? "The ACME endpoint is unavailable. Existing DNS gateway clients and managed certificates continue to work." : mode === "trusted_network" ? "Every client in the allowed networks can request certificates for the allowed domains. ACME accounts are created automatically, with no operator approval or gateway token." : "Clients register their own ACME account automatically. Approve an account below before it can request certificates. No separately configured client token is needed.";
+  $("acme-mode-help").textContent = mode === "disabled" ? "The ACME endpoint is unavailable. Existing DNS gateway clients and managed certificates continue to work." : "Every requested hostname must pass HTTP-01 verification before issuance. ACME accounts are created automatically; no account approval or gateway token is needed.";
   $("acme-base-url").required = mode !== "disabled";
   $("acme-terms").required = mode !== "disabled";
 }
@@ -875,6 +875,7 @@ async function loadAcmeSettings() {
     $("acme-mode").value = settings.mode;
     $("acme-base-url").value = settings.base_url || location.origin;
     $("acme-networks").value = settings.allowed_networks.join("\n");
+    $("acme-validation-networks").value = settings.validation_networks.join("\n");
     $("acme-domains").value = settings.allowed_domains.join("\n");
     $("acme-environment").value = settings.staging ? "staging" : "production";
     $("acme-terms").checked = settings.terms_agreed;
@@ -882,20 +883,15 @@ async function loadAcmeSettings() {
   }
   const directory = settings.base_url ? settings.base_url + "/acme/directory" : "";
   $("acme-directory-url").value = directory;
-  $("acme-connection-status").textContent = settings.mode === "disabled" ? "Save an enabled access mode to accept ACME clients." : `${settings.staging ? "Staging: issued certificates will not be browser trusted." : "Production: certificates are issued by Let's Encrypt."} ${settings.mode === "approved_accounts" ? "New accounts need approval below." : "Clients in the allowed networks can request covered domains immediately."}`;
+  $("acme-connection-status").textContent = settings.mode === "disabled" ? "Save an enabled access mode to accept ACME clients." : `${settings.staging ? "Staging: issued certificates will not be browser trusted." : "Production: certificates are issued by Let's Encrypt."} All requested hostnames require HTTP-01 verification. Wildcard certificates are unsupported.`;
   const quote = value => "'" + value.replaceAll("'", "'\"'\"'") + "'";
   $("acme-command").value = directory ? `certbot certonly --standalone --non-interactive --agree-tos \\\n  --server ${quote(directory)} \\\n  --email you@example.com -d ha.example.com \\\n  --issuance-timeout 1200` : "Configure the server URL first.";
   const accounts = $("acme-account-list"); accounts.replaceChildren();
   if (!result.accounts.length) empty(accounts, "No ACME accounts yet. Point a client at the directory URL to register.");
   for (const account of result.accounts) {
-    const approved = settings.approved_accounts.includes(account.id);
     const row = node("div", "row certificate-row");
-    row.append(identity(account.contact.join(", ") || "ACME account", `${account.id} · ${account.status === "deactivated" ? "Deactivated" : settings.mode === "trusted_network" ? "Allowed by network policy" : approved ? "Approved" : "Awaiting approval"}`));
-    const buttons = node("div", "row-actions");
-    if (account.status === "valid" && settings.mode === "approved_accounts") buttons.append(action(approved ? "Remove approval" : "Approve", async () => {
-      try { await api(`/acme/accounts/${account.id}`, "PUT", { approved: !approved }); await loadAcmeSettings(); } catch (error) { notify(error.message, true); }
-    }));
-    row.append(buttons); accounts.append(row);
+    row.append(identity(account.contact.join(", ") || "ACME account", `${account.id} · ${account.status === "deactivated" ? "Deactivated" : "HTTP-01 required for each order"}`));
+    accounts.append(row);
   }
   const orders = $("acme-order-list"); orders.replaceChildren();
   if (!result.orders.length) empty(orders, "No ACME orders yet");
@@ -917,6 +913,7 @@ $("acme-settings-form").onsubmit = async event => {
       mode: $("acme-mode").value,
       base_url: $("acme-base-url").value.trim(),
       allowed_networks: lines("acme-networks"), allowed_domains: lines("acme-domains"),
+      validation_networks: lines("acme-validation-networks"),
       staging: $("acme-environment").value === "staging", terms_agreed: $("acme-terms").checked,
     });
     acmeSettingsDirty = false;
