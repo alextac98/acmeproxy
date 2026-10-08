@@ -139,10 +139,10 @@ pub fn router() -> Router<App> {
 }
 
 fn certificate_expiry(der: Option<&[u8]>, fullchain: Option<&str>) -> Option<i64> {
-    if let Some(der) = der {
-        if let Ok((_, cert)) = x509_parser::parse_x509_certificate(der) {
-            return Some(cert.validity().not_after.timestamp());
-        }
+    if let Some(der) = der
+        && let Ok((_, cert)) = x509_parser::parse_x509_certificate(der)
+    {
+        return Some(cert.validity().not_after.timestamp());
     }
     let (_, pem) = x509_parser::pem::parse_x509_pem(fullchain?.as_bytes()).ok()?;
     Some(pem.parse_x509().ok()?.validity().not_after.timestamp())
