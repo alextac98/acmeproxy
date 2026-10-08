@@ -1,4 +1,13 @@
 const { test, expect } = require("@playwright/test");
+const { goTo } = require("./navigation");
+
+test.beforeEach(async ({ page }) => {
+  await page.route("**/api/admin/certificates", route => route.fulfill({ json: [] }));
+  await page.route("**/api/admin/acme/settings", route => route.fulfill({ json: {
+    settings: { mode: "disabled", base_url: "", allowed_networks: [], validation_networks: [], allowed_domains: [], staging: true, terms_agreed: false }, accounts: [], orders: [],
+  } }));
+  await page.route("**/api/admin/activity?*", route => route.fulfill({ json: { retention: 1000, stored: 0, events: [], next_before: null } }));
+});
 
 test("admin can configure DNS, create and revoke a client, and use the mobile layout", async ({
   page,
@@ -13,9 +22,8 @@ test("admin can configure DNS, create and revoke a client, and use the mobile la
     .getByLabel("Admin token", { exact: true })
     .fill("browser-test-admin-token-not-for-deployment");
   await page.getByRole("button", { name: "Open administration" }).click();
-  await expect(
-    page.getByRole("heading", { name: "DNS providers", exact: true }),
-  ).toBeVisible();
+  await expect(page.locator("#page-title")).toHaveText("Overview");
+  await goTo(page, "providers");
   await page.locator("#add-button").click();
   await page.getByLabel("Connection name").fill("Lab DNS");
   await page.getByLabel("DNS provider", { exact: true }).selectOption("dns_cf");
@@ -23,16 +31,17 @@ test("admin can configure DNS, create and revoke a client, and use the mobile la
   await page.getByLabel("CF_Token", { exact: true }).fill("fake-browser-token");
   await page.getByRole("button", { name: "Save provider" }).click();
   await expect(page.locator("#provider-list")).toContainText("Lab DNS");
-  await page.getByRole("button", { name: "Edit", exact: true }).click();
+  await page.locator("#detail-panel").getByRole("link", { name: "Edit provider", exact: true }).click();
   await expect(page.getByLabel("CF_Token", { exact: true })).toHaveValue("");
   await page.getByLabel("Connection name").fill("Lab DNS updated");
   await page.getByRole("button", { name: "Save provider" }).click();
   await expect(page.locator("#provider-list")).toContainText("Lab DNS updated");
+  await goTo(page, "providers");
   await page.screenshot({
     path: "test-results/providers-desktop.png",
     fullPage: true,
   });
-  await page.locator('[data-tab="clients"]').click();
+  await goTo(page, "clients");
   await page.locator("#add-button").click();
   await page.getByLabel("Client name", { exact: true }).fill("Home Assistant");
   await page.getByLabel("Allowed domains").fill("home.example.com");
@@ -45,22 +54,24 @@ test("admin can configure DNS, create and revoke a client, and use the mobile la
   );
   await page.getByRole("button", { name: "Done", exact: true }).click();
   await expect(page.locator("#new-client-token")).toHaveValue("");
-  await page.getByRole("button", { name: "Revoke", exact: true }).click();
+  await page.getByRole("button", { name: "Revoke client", exact: true }).click();
   await page.getByRole("button", { name: "Confirm", exact: true }).click();
   await expect(page.locator("#client-list")).not.toContainText("Home Assistant");
   await expect(page.locator("#revoked-client-list")).not.toBeVisible();
+  await page.locator("#page-back").click();
   await page.locator("#revoked-clients summary").click();
   await expect(page.locator("#revoked-client-list")).toContainText("Home Assistant");
-  await page.getByRole("button", { name: "Delete", exact: true }).click();
+  await page.locator("#revoked-client-list").getByRole("link", { name: "View details" }).click();
+  await page.getByRole("button", { name: "Delete client", exact: true }).click();
   await expect(page.locator("#confirm-description")).toContainText("validation history permanently");
   await page.locator("#confirm-dialog").getByRole("button", { name: "Cancel" }).click();
   await expect(page.locator("#revoked-client-list")).toContainText("Home Assistant");
-  await page.getByRole("button", { name: "Delete", exact: true }).click();
+  await page.getByRole("button", { name: "Delete client", exact: true }).click();
   await page.getByRole("button", { name: "Confirm", exact: true }).click();
   await expect(page.locator("#revoked-clients")).not.toBeVisible();
   await expect(page.locator("#notice")).toHaveText("Client permanently deleted.");
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.locator('[data-tab="providers"]').click();
+  await goTo(page, "providers");
   expect(
     await page.evaluate(
       () => document.documentElement.scrollWidth <= innerWidth,
@@ -80,7 +91,7 @@ test("admin can configure DNS, create and revoke a client, and use the mobile la
 for (const width of [1280, 390]) {
   test(`validation errors stay inside forms at ${width}px`, async ({ page }) => {
     await page.setViewportSize({ width, height: 844 });
-    await page.goto("/");
+    await page.goto("/providers");
     await page.getByRole("button", { name: "Open administration" }).click();
     await expect(page.locator("#admin-token-validation-error")).toBeVisible();
     await page.getByLabel("Admin token", { exact: true })
@@ -92,12 +103,12 @@ for (const width of [1280, 390]) {
     await expect(page.locator("#provider-name-validation-error")).toBeVisible();
     await expect(page.locator("#provider-zone-validation-error")).toBeVisible();
     await expect(page.locator("#provider-name")).toBeFocused();
-    await page.locator("#provider-dialog").getByRole("button", { name: "Cancel" }).click();
+    await page.locator("#provider-editor-panel").getByRole("button", { name: "Cancel" }).click();
     await page.locator("#add-button").click();
-    await expect(page.locator("#provider-dialog .field-error")).toHaveCount(0);
-    await page.locator("#provider-dialog").getByRole("button", { name: "Cancel" }).click();
+    await expect(page.locator("#provider-editor-panel .field-error")).toHaveCount(0);
+    await page.locator("#provider-editor-panel").getByRole("button", { name: "Cancel" }).click();
 
-    await page.locator('[data-tab="clients"]').click();
+    await goTo(page, "clients");
     await page.locator("#add-button").click();
     await page.getByLabel("Client name", { exact: true }).fill("Validation check");
     let submissions = 0;
@@ -127,7 +138,7 @@ for (const width of [1280, 390]) {
     await expect(domains).not.toHaveAttribute("aria-invalid");
     await page.getByRole("button", { name: "Create client" }).click();
     await expect(page.locator("#client-error")).toHaveText("Invalid domain scope");
-    await expect(page.locator("#client-dialog")).toBeVisible();
+    await expect(page.locator("#client-editor-panel")).toBeVisible();
     expect(submissions).toBe(1);
   });
 }
@@ -160,7 +171,7 @@ for (const width of [1280, 390]) {
     await page.goto("/");
     await page.getByLabel("Admin token", { exact: true }).fill("test-token");
     await page.getByRole("button", { name: "Open administration" }).click();
-    await page.getByRole("link", { name: "DNS validations", exact: true }).click();
+    await goTo(page, "challenges");
     await expect(page.getByRole("heading", { name: "DNS validations", exact: true })).toBeVisible();
     const groups = page.locator(".certificate-domain");
     await expect(groups).toHaveCount(3);
@@ -224,7 +235,7 @@ test("manual refresh reports progress, unchanged success, and failure", async ({
   await page.goto("/");
   await page.getByLabel("Admin token", { exact: true }).fill("test-token");
   await page.getByRole("button", { name: "Open administration" }).click();
-  await page.getByRole("link", { name: "DNS validations", exact: true }).click();
+  await goTo(page, "challenges");
   const button = page.locator("#refresh");
   const status = page.locator("#refresh-status");
   for (const shouldFail of [false, true, false]) {
@@ -246,8 +257,8 @@ test("manual refresh reports progress, unchanged success, and failure", async ({
 test("tab URLs support direct links, reloads, and browser history", async ({ page }) => {
   const routes = [
     ["/providers", "DNS providers"],
-    ["/clients", "Clients"],
-    ["/validations", "DNS validations"],
+    ["/dns-gateway", "DNS gateway"],
+    ["/activity/validations", "DNS validations"],
     ["/activity", "Activity"],
   ];
   const login = async () => {
@@ -261,7 +272,7 @@ test("tab URLs support direct links, reloads, and browser history", async ({ pag
     await login();
     await expect(page.locator("#page-title")).toHaveText(title);
     await expect(page).toHaveURL(new RegExp(`${path}$`));
-    await expect(page.getByRole("navigation").getByRole("link", { name: title, exact: true }))
+    await expect(page.locator(title === "DNS validations" ? '#activity-tabs [data-tab="challenges"]' : title === "Activity" ? '#main-navigation [data-tab="activity"]' : title === "DNS gateway" ? '#main-navigation [data-tab="clients"]' : '#main-navigation [data-tab="providers"]'))
       .toHaveAttribute("aria-current", "page");
   }
   await page.reload();
@@ -269,28 +280,34 @@ test("tab URLs support direct links, reloads, and browser history", async ({ pag
   await expect(page.locator("#page-title")).toHaveText("Activity");
   await expect(page).toHaveURL(/\/activity$/);
   for (const [path, title] of routes.slice(0, 3)) {
-    await page.getByRole("navigation").getByRole("link", { name: title, exact: true }).click();
+    await goTo(page, title === "DNS validations" ? "challenges" : title === "DNS gateway" ? "clients" : "providers");
     await expect(page).toHaveURL(new RegExp(`${path}$`));
     await expect(page.locator("#page-title")).toHaveText(title);
   }
   // Clicking the active tab must not add a duplicate history entry.
-  await page.getByRole("navigation").getByRole("link", { name: "DNS validations", exact: true }).click();
+  await page.locator('#activity-tabs [data-tab="challenges"]').click();
   await page.goBack();
-  await expect(page).toHaveURL(/\/clients$/);
-  await expect(page.locator("#page-title")).toHaveText("Clients");
+  await expect(page).toHaveURL(/\/activity$/);
+  await expect(page.locator("#page-title")).toHaveText("Activity");
+  await page.goBack();
+  await expect(page).toHaveURL(/\/dns-gateway$/);
+  await expect(page.locator("#page-title")).toHaveText("DNS gateway");
   await page.locator("#add-button").click();
-  await expect(page.locator("#client-dialog")).toBeVisible();
+  await expect(page.locator("#client-editor-panel")).toBeVisible();
+  await page.goBack();
+  await expect(page).toHaveURL(/\/dns-gateway$/);
+  await expect(page.locator("#client-editor-panel")).not.toBeVisible();
   await page.goBack();
   await expect(page).toHaveURL(/\/providers$/);
   await expect(page.locator("#page-title")).toHaveText("DNS providers");
-  await expect(page.locator("#client-dialog")).not.toBeVisible();
+  await expect(page.locator("#client-editor-panel")).not.toBeVisible();
   await page.goForward();
-  await expect(page).toHaveURL(/\/clients$/);
-  await expect(page.locator("#page-title")).toHaveText("Clients");
+  await expect(page).toHaveURL(/\/dns-gateway$/);
+  await expect(page.locator("#page-title")).toHaveText("DNS gateway");
   await page.locator("aside .brand").click();
-  await expect(page).toHaveURL(/\/providers$/);
+  await expect(page).toHaveURL(/\/overview$/);
   await page.goto("/");
-  await expect(page).toHaveURL(/\/providers$/);
+  await expect(page).toHaveURL(/\/overview$/);
   expect((await page.request.get("/not-a-page")).status()).toBe(404);
 });
 
@@ -320,12 +337,14 @@ for (const width of [1280, 390]) {
     await expect(page.getByText("Old service", { exact: true })).toBeVisible();
     await page.clock.runFor(10000);
     await expect(page.getByText("Old service", { exact: true })).toBeVisible();
-    await page.getByRole("button", { name: "Delete", exact: true }).click();
+    await page.locator("#revoked-client-list").getByRole("link", { name: "View details" }).click();
+    await expect(page.locator("#page-title")).toHaveText("Old service");
+    await page.getByRole("button", { name: "Delete client", exact: true }).click();
     await page.getByRole("button", { name: "Confirm", exact: true }).click();
     await expect(page.locator("#confirm-error")).toHaveText("Clean up outstanding DNS validations first");
     await expect(page.locator("#confirm-dialog")).toBeVisible();
     await page.locator("#confirm-dialog").getByRole("button", { name: "Cancel" }).click();
-    await expect(page.getByText("Old service", { exact: true })).toBeVisible();
+    await expect(page.locator("#page-title")).toHaveText("Old service");
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     await page.screenshot({ path: `test-results/clients-${width}.png`, fullPage: true });
   });
@@ -351,7 +370,7 @@ test("success notices expire, reset their timer, and clear on navigation", async
   await page.clock.runFor(4000);
   await expect(notice).not.toBeVisible();
   await page.evaluate(() => notify("Provider removed."));
-  await page.getByRole("link", { name: "Clients", exact: true }).click();
+  await goTo(page, "clients");
   await expect(notice).not.toBeVisible();
   await page.goBack();
   await expect(notice).not.toBeVisible();
@@ -406,7 +425,7 @@ for (const width of [1280, 390]) {
     await page.getByRole("button", { name: "Open administration" }).click();
     await expect(page.locator("#audit-list tr")).toHaveCount(50);
     await expect(page.locator("#audit-list tr").first()).toContainText("host-120.example.com");
-    await expect(page.getByLabel("Keep last N events")).toHaveValue("120");
+    await expect(page.getByLabel("Keep last N events")).not.toBeVisible();
     await page.getByRole("button", { name: "Older", exact: false }).click();
     await expect(page.locator("#audit-list tr").first()).toContainText("host-70.example.com");
     const readsBefore = reads;
@@ -425,9 +444,11 @@ for (const width of [1280, 390]) {
     await page.getByLabel("Search events").fill("");
     await page.getByRole("button", { name: "Search", exact: true }).click();
     await expect(page.locator("#audit-list tr")).toHaveCount(50);
-    // Background refresh must not discard an unsaved limit.
+    // Background refresh must not discard an unsaved limit in Settings.
+    await goTo(page, "settings");
+    await expect(page.getByLabel("Keep last N events")).toHaveValue("120");
     await page.getByLabel("Keep last N events").fill("60");
-    await page.getByRole("heading", { name: "Activity log" }).click();
+    await page.getByRole("heading", { name: "Activity retention" }).click();
     await page.clock.runFor(10000);
     await expect(page.getByLabel("Keep last N events")).toHaveValue("60");
     await page.getByRole("button", { name: "Save limit" }).click();
@@ -438,6 +459,7 @@ for (const width of [1280, 390]) {
     await page.getByRole("button", { name: "Confirm", exact: true }).click();
     await expect(page.locator("#confirm-dialog")).not.toBeVisible();
     expect(saved).toEqual([60]);
+    await goTo(page, "activity");
     await expect(page.locator("#activity-count")).toContainText("60 events stored");
     await page.getByRole("button", { name: "Older", exact: false }).click();
     await expect(page.locator("#audit-list tr")).toHaveCount(10);
@@ -471,7 +493,7 @@ for (const width of [1280, 390]) {
     await page.getByRole('button', { name: 'Open administration' }).click();
     await expect(page.locator('#page-title')).toHaveText('About');
     await expect(page.locator('#about-panel')).toBeVisible();
-    await expect(page.locator('#gateway-summary')).toBeHidden();
+    await expect(page.locator('#overview-panel')).toBeHidden();
     await expect(page.locator('#add-button')).toBeHidden();
     await expect(page.locator('#about-version')).toHaveText('v2.3.4-aaaaaaa-dirty');
     await expect(page.locator('#app-version')).toHaveText('v2.3.4-aaaaaaa-dirty');
@@ -480,6 +502,7 @@ for (const width of [1280, 390]) {
     expect(await page.locator('#app-version').evaluate(el => getComputedStyle(el).textAlign)).toBe('center');
     await expect(page.locator('#app-version')).not.toHaveAttribute('data-tab');
     await expect(page.locator('#about-build a')).toHaveAttribute('href', `https://github.com/alextac98/acmeproxy/commit/${revision}`);
+    if (await page.locator("#menu-toggle").isVisible()) await page.locator("#menu-toggle").click();
     await expect(page.locator('.utility-actions').getByRole('link', { name: 'About', exact: true }))
       .toHaveAttribute('aria-current', 'page');
     const report = page.getByRole('link', { name: 'Report a problem', exact: true });
@@ -494,8 +517,9 @@ for (const width of [1280, 390]) {
     await expect(page.locator('.about-attributions')).toHaveAttribute('open', '');
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     await page.screenshot({ path: `test-results/about-${width}.png`, fullPage: true });
-    await page.getByRole('navigation').getByRole('link', { name: 'DNS providers', exact: true }).click();
-    await expect(page.locator('#gateway-summary')).toBeVisible();
+    await goTo(page, "providers");
+    await expect(page.locator('#overview-panel')).toBeHidden();
+    if (await page.locator("#menu-toggle").isVisible()) await page.locator("#menu-toggle").click();
     await page.locator('.utility-actions').getByRole('link', { name: 'About', exact: true }).click();
     await expect(page).toHaveURL(/\/about$/);
     await page.goBack();

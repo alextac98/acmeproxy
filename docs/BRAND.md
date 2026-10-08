@@ -31,7 +31,7 @@ The supplied assets are transparent PNGs. The original generated artwork and pro
 
 ## Typography and components
 
-Use the existing Inter-first system sans-serif stack; no external font download is required. Body text is 16 px, controls 14 px, and desktop page headings 32 px. Use medium or semibold weights for hierarchy. Use monospace for identifiers and configuration values. The logo wordmark remains artwork.
+Use the existing Inter-first system sans-serif stack; no external font download is required. Body text and controls are 14 px, and desktop page headings are 28 px. Mobile editable fields use 16 px. Use medium or semibold weights for hierarchy. Use monospace for identifiers and configuration values. The logo wordmark remains artwork.
 
 Keep spacing mainly in multiples of 4 px, 6 px corner radii for controls, 8 px for cards, and 12–14 px for dialogs and the sign-in card. Primary buttons use solid royal blue with white labels, hover blue on hover, and navy while pressed. Secondary actions use white or a pale blue hover surface. Selected navigation uses a lighter navy surface plus a cyan edge and light text.
 
