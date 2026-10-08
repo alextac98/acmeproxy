@@ -1,0 +1,206 @@
+<div id="ap-clients-preview" class="viz-dotted-background">
+  <div class="ap-window">
+    <div class="ap-context"><span>Administration / ACME endpoint</span><span>Example data · Oct 8, 2026</span></div>
+    <header class="ap-heading">
+      <div class="ap-title-row"><h1>ACME endpoint</h1><span class="ap-status" id="ap-endpoint-status"><i data-lucide="circle-check" aria-hidden="true"></i><span>Enabled</span></span></div>
+      <p>Connect your ACME client via HTTP-01. ACME Proxy obtains the certificates; your client stores the private keys and handles renewal. No gateway token is needed, and wildcard certificates are not supported.</p>
+    </header>
+    <div class="ap-tabs" role="tablist" aria-label="ACME endpoint">
+      <button type="button" role="tab" id="ap-tab-connection" aria-controls="ap-panel-connection" aria-selected="false" class="cursor-interaction" data-view="connection">Connection</button>
+      <button type="button" role="tab" id="ap-tab-settings" aria-controls="ap-panel-settings" aria-selected="false" class="cursor-interaction" data-view="settings">Settings</button>
+      <button type="button" role="tab" id="ap-tab-clients" aria-controls="ap-panel-clients" aria-selected="true" class="cursor-interaction" data-view="clients">Clients <span class="ap-count">1</span></button>
+    </div>
+    <section id="ap-panel-clients" role="tabpanel" aria-labelledby="ap-tab-clients">
+      <div class="ap-section-heading"><h2>Registered clients</h2><p>Clients register automatically when they connect to this endpoint.</p></div>
+      <div class="ap-client-list">
+        <div class="ap-list-head" aria-hidden="true"><span>Client</span><span>Registration</span><span>Requests</span></div>
+        <article class="ap-client">
+          <div class="ap-client-identity"><strong>tls-admin@example.com</strong><span class="ap-secondary">Registered Jul 7, 2026</span></div>
+          <div class="ap-client-status"><span class="ap-status"><i data-lucide="circle-check" aria-hidden="true"></i>Registered</span></div>
+          <div class="ap-client-action"><span class="ap-secondary">3 recent requests</span><button type="button" id="ap-requests-toggle" class="ap-link cursor-interaction" aria-expanded="true" aria-controls="ap-client-requests">Hide requests <i data-lucide="chevron-down" aria-hidden="true"></i></button></div>
+        </article>
+        <section class="ap-requests" id="ap-client-requests" aria-label="Recent certificate requests">
+          <h3>Recent certificate requests</h3>
+          <div class="ap-request"><div><strong>home.example.com</strong><span class="ap-secondary">Issued Oct 8, 2026, 9:14 AM · Production</span><span class="ap-expiry">Expires <time datetime="2027-01-06">Jan 6, 2027</time> · 90 days remaining</span></div><span class="ap-status"><i data-lucide="circle-check" aria-hidden="true"></i>Valid</span></div>
+          <div class="ap-request"><div><strong>api.example.com</strong><span class="ap-secondary">Requested Oct 7, 2026, 4:32 PM · Production</span><span class="ap-secondary">No certificate issued</span></div><span class="ap-status ap-failed"><i data-lucide="circle-alert" aria-hidden="true"></i>Failed</span><p class="ap-error">HTTP-01 validation failed: the challenge URL returned 404.</p></div>
+          <div class="ap-request"><div><strong>legacy.example.com</strong><span class="ap-secondary">Issued Jul 8, 2026, 10:02 AM · Production</span><span class="ap-expiry ap-expiry-expired">Expired <time datetime="2026-10-06">Oct 6, 2026</time> · 2 days ago</span></div><span class="ap-status ap-failed"><i data-lucide="circle-alert" aria-hidden="true"></i>Expired</span></div>
+        </section>
+        <details class="ap-registration" id="ap-registration-details">
+          <summary class="cursor-interaction">Registration details</summary>
+          <dl><div><dt>Client ID</dt><dd><code>5c8a2e91-18f3-4fa7-927d-67a51230fb83</code></dd></div><div><dt>Contact</dt><dd>tls-admin@example.com</dd></div><div><dt>Key fingerprint</dt><dd><code>r6kFJcU3Y8B4m9pAqV2xN0dHw7sEe5tLz1iGvCuRoPQ</code></dd></div></dl>
+        </details>
+      </div>
+    </section>
+    <section id="ap-panel-connection" role="tabpanel" aria-labelledby="ap-tab-connection" hidden>
+      <div class="ap-section-heading"><h2>Connect an ACME client</h2><p>Point your client at this directory URL to register and request certificates.</p></div>
+      <label class="ap-field">ACME directory URL<input type="text" readonly value="https://acme.example.com/acme/directory"></label>
+      <h3 class="ap-command-heading">Certbot example</h3>
+      <pre><code>certbot certonly --standalone --server https://acme.example.com/acme/directory --email tls-admin@example.com -d home.example.com</code></pre>
+      <p class="ap-secondary">Your domain must answer HTTP-01 on port 80. Keep your client's renewal timer enabled.</p>
+    </section>
+    <section id="ap-panel-settings" role="tabpanel" aria-labelledby="ap-tab-settings" hidden>
+      <div class="ap-section-heading"><h2>Endpoint settings</h2><p>Control whether this endpoint accepts certificate requests.</p></div>
+      <form id="ap-settings-form"><label class="ap-check cursor-interaction"><input type="checkbox" id="ap-enabled" checked>Enable ACME endpoint</label><div class="ap-save-row"><button type="submit" class="ap-primary cursor-interaction">Save changes</button><span id="ap-save-status" class="ap-secondary" role="status"></span></div></form>
+    </section>
+  </div>
+</div>
+<style>
+  #ap-clients-preview {
+    --ap-blue: light-dark(#0057e6, #8ab6ff);
+    --ap-button: light-dark(#0057e6, #276adb);
+    --ap-button-text: light-dark(#ffffff, #ffffff);
+    --ap-ink: light-dark(#172b4d, #e7edf8);
+    --ap-muted: light-dark(#566782, #a8b7cd);
+    --ap-canvas: light-dark(#f4f7fd, #121b2c);
+    --ap-surface: light-dark(#ffffff, #1b273b);
+    --ap-soft: light-dark(#f8faff, #172237);
+    --ap-border: light-dark(#dce4f2, #35445e);
+    --ap-input: light-dark(#a5b4cc, #667995);
+    --ap-tint: light-dark(#eaf1ff, #253e67);
+    --ap-success: light-dark(#227669, #8bd2bf);
+    --ap-success-bg: light-dark(#e8f5f1, #203b37);
+    --ap-danger: light-dark(#ab2f44, #ffa2ad);
+    --ap-danger-bg: light-dark(#fff2f4, #402735);
+    padding: 16px;
+  }
+  #ap-clients-preview * { box-sizing: border-box; }
+  #ap-clients-preview .ap-window { width: 100%; max-width: 850px; margin: 0 auto; padding: 28px; background: var(--ap-canvas); color: var(--ap-ink); border: 1px solid var(--ap-border); border-radius: 12px; font: 14px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+  #ap-clients-preview .ap-context { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px 16px; margin-bottom: 20px; color: var(--ap-muted); font-size: 12px; }
+  #ap-clients-preview .ap-title-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+  #ap-clients-preview h1 { margin: 0; font-size: 28px; line-height: 1.2; font-weight: 650; letter-spacing: -.5px; }
+  #ap-clients-preview h2 { margin: 0; font-size: 18px; line-height: 1.4; font-weight: 600; }
+  #ap-clients-preview h3 { margin: 0; font-size: 14px; font-weight: 600; }
+  #ap-clients-preview p { margin: 8px 0 0; }
+  #ap-clients-preview .ap-heading p { color: var(--ap-muted); margin-top: 12px; }
+  #ap-clients-preview .ap-tabs { display: flex; gap: 24px; border-bottom: 1px solid var(--ap-border); margin: 24px 0; }
+  #ap-clients-preview button { font: inherit; }
+  #ap-clients-preview .ap-tabs button { color: var(--ap-muted); background: transparent; padding: 10px 0 12px; border: 0; border-bottom: 2px solid transparent; margin-bottom: -1px; display: inline-flex; align-items: center; gap: 7px; }
+  #ap-clients-preview .ap-tabs button[aria-selected="true"] { color: var(--ap-blue); border-bottom-color: var(--ap-blue); font-weight: 600; }
+  #ap-clients-preview .ap-count { display: inline-flex; align-items: center; justify-content: center; background: var(--ap-tint); min-width: 22px; padding: 0 6px; border-radius: 6px; font-size: 12px; }
+  #ap-clients-preview .ap-section-heading { margin-bottom: 20px; }
+  #ap-clients-preview .ap-section-heading p, #ap-clients-preview .ap-secondary { color: var(--ap-muted); }
+  #ap-clients-preview .ap-secondary { font-size: 12px; }
+  #ap-clients-preview .ap-client-list { background: var(--ap-surface); border: 1px solid var(--ap-border); border-radius: 8px; }
+  #ap-clients-preview .ap-list-head, #ap-clients-preview .ap-client { display: grid; grid-template-columns: minmax(0, 1.45fr) minmax(0, 1fr) minmax(0, 1fr); column-gap: 16px; }
+  #ap-clients-preview .ap-list-head { padding: 11px 18px; background: var(--ap-soft); color: var(--ap-muted); font-size: 12px; border-bottom: 1px solid var(--ap-border); border-radius: 8px 8px 0 0; }
+  #ap-clients-preview .ap-list-head span:last-child { text-align: right; }
+  #ap-clients-preview .ap-client { padding: 20px 18px; align-items: center; }
+  #ap-clients-preview strong { font-weight: 600; overflow-wrap: anywhere; }
+  #ap-clients-preview .ap-client-identity, #ap-clients-preview .ap-client-action { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+  #ap-clients-preview .ap-client-action { align-items: flex-end; }
+  #ap-clients-preview .ap-status { display: inline-flex; align-items: center; gap: 5px; border-radius: 5px; padding: 3px 8px; background: var(--ap-success-bg); color: var(--ap-success); font-size: 12px; white-space: nowrap; }
+  #ap-clients-preview .ap-status svg { width: 14px; height: 14px; }
+  #ap-clients-preview .ap-disabled { color: var(--ap-muted); background: var(--ap-soft); }
+  #ap-clients-preview .ap-link { color: var(--ap-blue); border: 0; background: transparent; padding: 3px 0; display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
+  #ap-clients-preview .ap-link svg { width: 15px; height: 15px; }
+  #ap-clients-preview .ap-link[aria-expanded="true"] svg { transform: rotate(180deg); }
+  #ap-clients-preview .ap-requests { border-top: 1px solid var(--ap-border); padding: 18px; background: var(--ap-soft); }
+  #ap-clients-preview .ap-request { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 8px 16px; padding-top: 16px; }
+  #ap-clients-preview .ap-request + .ap-request { margin-top: 16px; border-top: 1px solid var(--ap-border); }
+  #ap-clients-preview .ap-request > div { display: flex; flex-direction: column; gap: 3px; }
+  #ap-clients-preview .ap-expiry { color: var(--ap-ink); font-size: 12px; }
+  #ap-clients-preview .ap-expiry-expired { color: var(--ap-danger); }
+  #ap-clients-preview .ap-failed { color: var(--ap-danger); background: var(--ap-danger-bg); }
+  #ap-clients-preview .ap-error { margin: 0; color: var(--ap-danger); font-size: 12px; grid-column: 1/-1; }
+  #ap-clients-preview .ap-registration { border-top: 1px solid var(--ap-border); padding: 10px 18px; }
+  #ap-clients-preview .ap-registration summary { color: var(--ap-muted); font-size: 12px; padding: 6px 0; }
+  #ap-clients-preview dl { display: grid; gap: 12px; margin: 12px 0 8px; }
+  #ap-clients-preview dl > div { display: grid; grid-template-columns: 110px minmax(0, 1fr); gap: 12px; }
+  #ap-clients-preview dt { color: var(--ap-muted); font-size: 12px; }
+  #ap-clients-preview dd { margin: 0; font-size: 12px; overflow-wrap: anywhere; }
+  #ap-clients-preview code { font: 12px/1.6 ui-monospace, SFMono-Regular, Consolas, monospace; overflow-wrap: anywhere; }
+  #ap-clients-preview .ap-field { display: flex; flex-direction: column; gap: 6px; font-size: 12px; }
+  #ap-clients-preview input[type="text"] { width: 100%; padding: 10px 12px; border: 1px solid var(--ap-input); border-radius: 5px; background: var(--ap-surface); color: var(--ap-ink); font: 14px/1.5 ui-monospace, monospace; }
+  #ap-clients-preview .ap-command-heading { margin: 20px 0 8px; }
+  #ap-clients-preview pre { margin: 0; padding: 14px; border: 1px solid var(--ap-border); border-radius: 6px; white-space: pre-wrap; overflow-wrap: anywhere; background: var(--ap-surface); }
+  #ap-clients-preview .ap-check { display: flex; align-items: center; gap: 10px; }
+  #ap-clients-preview input[type="checkbox"] { accent-color: var(--ap-button); width: 16px; height: 16px; margin: 0; }
+  #ap-clients-preview .ap-save-row { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; margin-top: 24px; }
+  #ap-clients-preview .ap-primary { color: var(--ap-button-text); background: var(--ap-button); border: 1px solid var(--ap-button); border-radius: 6px; padding: 9px 15px; font-weight: 600; }
+  #ap-clients-preview [hidden] { display: none !important; }
+  @media (max-width: 620px) {
+    #ap-clients-preview { padding: 8px; }
+    #ap-clients-preview .ap-window { padding: 20px 16px; }
+    #ap-clients-preview .ap-list-head { display: none; }
+    #ap-clients-preview .ap-client { grid-template-columns: minmax(0, 1fr) auto; gap: 14px 12px; }
+    #ap-clients-preview .ap-client-identity { grid-column: 1/-1; }
+    #ap-clients-preview .ap-client-action { gap: 2px; }
+    #ap-clients-preview .ap-tabs { gap: 20px; }
+    #ap-clients-preview dl > div { grid-template-columns: minmax(0, 1fr); gap: 3px; }
+  }
+  @media (max-width: 370px) {
+    #ap-clients-preview h1 { font-size: 25px; }
+    #ap-clients-preview .ap-client { grid-template-columns: minmax(0, 1fr); }
+    #ap-clients-preview .ap-client-action { align-items: flex-start; }
+    #ap-clients-preview .ap-request { grid-template-columns: minmax(0, 1fr); }
+    #ap-clients-preview .ap-request > .ap-status { justify-self: start; }
+  }
+  @media (pointer: coarse) {
+    #ap-clients-preview button, #ap-clients-preview summary, #ap-clients-preview .ap-check { min-height: 44px; }
+    #ap-clients-preview input[type="text"] { font-size: 16px; }
+  }
+</style>
+<script>
+(() => {
+  const root = document.getElementById('ap-clients-preview');
+  const tabs = Array.from(root.querySelectorAll('[role="tab"]'));
+  const requestToggle = root.querySelector('#ap-requests-toggle');
+  const requests = root.querySelector('#ap-client-requests');
+  const registration = root.querySelector('#ap-registration-details');
+  const enabled = root.querySelector('#ap-enabled');
+  let state = { view: 'clients', requestsOpen: true, registrationOpen: false, endpointEnabled: true };
+  const render = () => {
+    tabs.forEach(tab => {
+      const selected = tab.dataset.view === state.view;
+      tab.setAttribute('aria-selected', String(selected));
+      root.querySelector('#' + tab.getAttribute('aria-controls')).hidden = !selected;
+    });
+    requestToggle.setAttribute('aria-expanded', String(state.requestsOpen));
+    requestToggle.firstChild.textContent = state.requestsOpen ? 'Hide requests ' : 'View requests ';
+    requests.hidden = !state.requestsOpen;
+    registration.open = state.registrationOpen;
+    enabled.checked = state.endpointEnabled;
+    root.querySelector('#ap-endpoint-status span').textContent = state.endpointEnabled ? 'Enabled' : 'Disabled';
+    root.querySelector('#ap-endpoint-status').classList.toggle('ap-disabled', !state.endpointEnabled);
+    const statusIcon = root.querySelector('#ap-endpoint-status svg');
+    if (statusIcon) statusIcon.style.display = state.endpointEnabled ? '' : 'none';
+  };
+  const persist = () => {
+    if (typeof window.openai?.setWidgetState === 'function') {
+      window.openai.setWidgetState({modelContent: {screen: 'ACME endpoint', tab: state.view, sampleClient: 'tls-admin@example.com', requestsExpanded: state.requestsOpen}, privateContent: {...state}}).catch(() => {});
+    }
+  };
+  const restore = saved => {
+    const value = saved?.privateContent;
+    if (!value || typeof value !== 'object') return;
+    if (['clients', 'connection', 'settings'].includes(value.view)) state.view = value.view;
+    ['requestsOpen', 'registrationOpen', 'endpointEnabled'].forEach(key => { if (typeof value[key] === 'boolean') state[key] = value[key]; });
+    render();
+  };
+  tabs.forEach((tab, index) => {
+    tab.addEventListener('click', () => { state.view = tab.dataset.view; render(); persist(); });
+    tab.addEventListener('keydown', event => {
+      let next;
+      if (event.key === 'ArrowRight') next = (index + 1) % tabs.length;
+      if (event.key === 'ArrowLeft') next = (index + tabs.length - 1) % tabs.length;
+      if (event.key === 'Home') next = 0;
+      if (event.key === 'End') next = tabs.length - 1;
+      if (next === undefined) return;
+      event.preventDefault(); tabs[next].focus(); tabs[next].click();
+    });
+  });
+  requestToggle.addEventListener('click', () => { state.requestsOpen = !state.requestsOpen; render(); persist(); });
+  registration.addEventListener('toggle', () => {
+    if (state.registrationOpen === registration.open) return;
+    state.registrationOpen = registration.open; persist();
+  });
+  root.querySelector('#ap-settings-form').addEventListener('submit', event => {
+    event.preventDefault(); state.endpointEnabled = enabled.checked; render();
+    root.querySelector('#ap-save-status').textContent = 'Saved in this example'; persist();
+  });
+  restore(window.openai?.widgetState);
+  window.addEventListener('openai:set_globals', event => {
+    if (event.detail?.globals?.widgetState !== undefined) restore(event.detail.globals.widgetState);
+  });
+})();
+</script>

@@ -18,7 +18,10 @@ let activityData = null,
   activitySaving = false,
   activityRequest = 0,
   activityRetentionDirty = false;
-let certificatesData = null, acmeSettingsDirty = false, acmeSettingsData = null;
+let certificatesData = null, acmeSettingsDirty = false, acmeSettingsData = null, acmeSettingsSaving = false;
+let currentAcmeView = "connection";
+const acmeClientRequestsOpen = new Set(), acmeClientRegistrationOpen = new Set();
+const acmePaths = { connection: "/acme-endpoint", settings: "/acme-endpoint/settings", clients: "/acme-endpoint/clients" };
 let sessionVersion = 0;
 let overviewRequest = 0, certificatesRequest = 0, acmeRequest = 0, certificateSaving = false;
 const methodDescriptions = {
@@ -32,7 +35,7 @@ const tabs = {
   providers: ["DNS providers", "+ Connect provider", "/providers", "Shared DNS access for all three certificate methods."],
   certificates: ["Managed certificates", "+ Request certificate", "/certificates", methodDescriptions.certificates],
   clients: ["DNS gateway", "+ Create gateway client", "/dns-gateway", methodDescriptions.clients],
-  acme: ["ACME endpoint", "Configure endpoint", "/acme-endpoint", methodDescriptions.acme],
+  acme: ["ACME endpoint", null, "/acme-endpoint", methodDescriptions.acme],
   challenges: ["DNS validations", null, "/activity/validations", "Inspect DNS publishing and cleanup, grouped by domain."],
   orders: ["ACME orders", null, "/activity/orders", "Inspect orders received through the HTTP-01 ACME endpoint."],
   activity: ["Activity", null, "/activity", "Search administrative and worker events."],
@@ -187,6 +190,13 @@ function logout() {
   activityRequest++;
   acmeSettingsDirty = false;
   acmeSettingsData = null;
+  acmeSettingsSaving = false;
+  acmeClientRequestsOpen.clear();
+  acmeClientRegistrationOpen.clear();
+  $("acme-client-list").replaceChildren();
+  $("acme-settings-save").disabled = true;
+  $("acme-endpoint-status").textContent = "Loading…";
+  $("acme-endpoint-status").className = "status";
   activityLoading = false;
   activityData = null;
   activityBefore = null;
@@ -239,8 +249,8 @@ function resolveRoute(path) {
   pathname = ({ "/clients": "/dns-gateway", "/validations": "/activity/validations" })[pathname] || pathname;
   const tab = Object.keys(tabs).find(key => tabs[key][2] === pathname);
   if (tab) return { tab, view: "list", id: null, path: pathname + url.search };
-  if (pathname === "/acme-endpoint/configuration")
-    return { tab: "acme", view: "edit", id: null, path: pathname };
+  const acmeView = pathname === "/acme-endpoint/configuration" ? "settings" : Object.keys(acmePaths).find(view => acmePaths[view] === pathname);
+  if (acmeView) return { tab: "acme", view: "list", acmeView, id: null, path: acmePaths[acmeView] + url.search };
   for (const key of ["providers", "certificates", "clients", "orders"]) {
     const prefix = tabs[key][2] + "/";
     if (!pathname.startsWith(prefix)) continue;
@@ -278,12 +288,15 @@ function navigate(path, navigation = "push") {
   currentView = route.view;
   currentId = route.id;
   currentPath = route.path;
+  currentAcmeView = route.acmeView || "connection";
   let title = tabs[currentTab][0];
   if (currentView === "new") title = ({ providers: "Connect DNS provider", certificates: "Request certificate", clients: "Create gateway client" })[currentTab];
-  if (currentView === "edit") title = currentTab === "acme" ? "Configure ACME endpoint" : "Edit DNS provider";
+  if (currentView === "edit") title = "Edit DNS provider";
   setPageTitle(title);
   $("page-description").textContent = tabs[currentTab][3] || "";
   $("page-description").hidden = !tabs[currentTab][3];
+  $("acme-endpoint-status").hidden = currentTab !== "acme";
+  renderAcmeTabs();
   $("add-button").hidden = currentView !== "list" || !tabs[currentTab][1];
   $("add-button").textContent = tabs[currentTab][1] || "";
   const backPath = currentView === "edit" && currentTab === "providers" ? resourcePath("providers", currentId) : tabs[currentTab][2];
@@ -346,13 +359,32 @@ window.addEventListener("popstate", () => {
   document.querySelectorAll("dialog[open]").forEach(dialog => dialog.close());
   navigate(location.pathname + location.search, "none");
 });
+function renderAcmeTabs() {
+  document.querySelectorAll("[data-acme-view]").forEach(tab => {
+    const selected = tab.dataset.acmeView === currentAcmeView;
+    tab.setAttribute("aria-selected", String(selected));
+    tab.tabIndex = selected ? 0 : -1;
+    $(tab.getAttribute("aria-controls")).hidden = !selected;
+  });
+}
+const acmeViewTabs = Array.from(document.querySelectorAll("[data-acme-view]"));
+acmeViewTabs.forEach((tab, index) => {
+  tab.onclick = () => { navigate(acmePaths[tab.dataset.acmeView]); tab.focus({ preventScroll: true }); };
+  tab.onkeydown = event => {
+    const next = event.key === "ArrowRight" ? (index + 1) % acmeViewTabs.length
+      : event.key === "ArrowLeft" ? (index + acmeViewTabs.length - 1) % acmeViewTabs.length
+      : event.key === "Home" ? 0 : event.key === "End" ? acmeViewTabs.length - 1 : null;
+    if (next === null) return;
+    event.preventDefault();
+    acmeViewTabs[next].click();
+  };
+});
 renderMethods();
 navigate(location.pathname + location.search, "replace");
 $("add-button").onclick = () => {
   if (currentTab === "overview") navigate(tabs.methods[2]);
   else if (currentTab === "providers") openProvider();
   else if (currentTab === "certificates") openCertificate();
-  else if (currentTab === "acme") navigate("/acme-endpoint/configuration");
   else openClient();
 };
 $("refresh").onclick = async () => {
@@ -1083,7 +1115,9 @@ function renderCurrentDetail() {
     }
     target.append(detailSection(record.revoked ? "Permanent deletion" : "Revoke access", node("p", "muted", record.revoked ? "Permanently delete this client and its validation history after DNS cleanup." : "Revocation immediately disables this client and queues cleanup of outstanding DNS validations."), action(record.revoked ? "Delete client" : "Revoke client", () => record.revoked ? deleteClient(record) : revokeClient(record), "danger")));
   } else if (currentTab === "orders") {
-    target.append(detailSection("ACME order", keyValues([["Order ID", record.id], ["Account ID", record.account_id], ["State", record.state], ["Phase", record.phase], ["Certificate type", record.staging ? "Staging · not browser trusted" : "Production"], ["Created", formatDate(record.created_at)]])));
+    target.append(detailSection("ACME order", keyValues([["Order ID", record.id], ["Client ID", record.account_id], ["State", record.state], ["Phase", record.phase], ["Certificate type", record.staging ? "Staging · not browser trusted" : "Production"], ["Created", formatDate(record.created_at)]])));
+    const [label, status] = acmeCertificateStatus(record);
+    target.append(detailSection("Certificate", node("span", "status " + status, label), acmeCertificateExpiry(record)));
     if (record.error) target.append(detailSection("Order error", node("p", "error", record.error)));
     target.append(node("p", "hint", "The ACME client keeps the private key and controls renewal. Inspect or retry the request from that client."));
   }
@@ -1130,9 +1164,109 @@ function renderOverview() {
   data.audit.slice(0, 4).forEach(event => { const row = node("div", "row"); row.append(identity(event.action, `${event.target} · ${formatDate(event.at)}`)); events.append(row); });
 }
 
+function acmeCertificateStatus(order) {
+  if (order.state === "valid") {
+    if (order.revoked) return ["Revoked", "failed"];
+    if (Number.isFinite(order.certificate_expires_at))
+      return order.certificate_expires_at <= Date.now() / 1000 ? ["Expired", "failed"] : ["Valid", "active"];
+    return ["Issued", "active"];
+  }
+  return ({ invalid: ["Failed", "failed"], processing: ["Issuing", "present_pending"], ready: ["Awaiting CSR", "present_pending"], pending: ["Verifying HTTP-01", "present_pending"] })[order.state] || [order.state, ""];
+}
+function acmeCertificateExpiry(order) {
+  if (order.state !== "valid") return node("p", "acme-expiry muted", order.state === "invalid" ? "No certificate issued" : "Certificate not issued yet");
+  const expires = order.certificate_expires_at;
+  if (!Number.isFinite(expires)) return node("p", "acme-expiry muted", "Expiry unavailable");
+  const remaining = expires - Date.now() / 1000;
+  const expired = remaining <= 0;
+  const date = new Date(expires * 1000);
+  const time = node("time", "", date.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" }));
+  time.dateTime = date.toISOString();
+  time.title = date.toLocaleString();
+  const days = expired ? Math.floor(-remaining / 86400) : Math.ceil(remaining / 86400);
+  const relative = expired ? days ? `${days} ${days === 1 ? "day" : "days"} ago` : "less than a day ago" : `${days} ${days === 1 ? "day" : "days"} remaining`;
+  const line = node("p", "acme-expiry" + (expired ? " error" : ""), expired ? "Expired " : "Expires ");
+  line.append(time, document.createTextNode(" · " + relative));
+  return line;
+}
+function renderAcmeClients(result) {
+  const list = $("acme-client-list");
+  const focusId = list.contains(document.activeElement) ? document.activeElement.id : null;
+  list.replaceChildren();
+  $("acme-client-count").textContent = result.accounts.length;
+  if (!result.accounts.length) return empty(list, "No registered clients yet. Point an ACME client at the directory URL on the Connection tab to register.");
+  const head = node("div", "acme-client-head");
+  head.setAttribute("aria-hidden", "true");
+  ["Client", "Registration", "Requests"].forEach(label => head.append(node("span", "", label)));
+  list.append(head);
+  const ordersByClient = new Map();
+  result.orders.forEach(order => {
+    if (!ordersByClient.has(order.account_id)) ordersByClient.set(order.account_id, []);
+    ordersByClient.get(order.account_id).push(order);
+  });
+  result.accounts.forEach(client => {
+    const contacts = client.contact.map(contact => contact.replace(/^mailto:/i, ""));
+    const name = contacts.join(", ") || "Client " + client.id.slice(0, 8);
+    const orders = ordersByClient.get(client.id) || [];
+    const item = node("article", "acme-client");
+    item.setAttribute("aria-label", name);
+    const row = node("div", "acme-client-row");
+    const info = node("div", "acme-client-identity");
+    info.append(node("strong", "", name), node("span", "row-subtitle", "Registered " + formatDate(client.created_at)));
+    const registrationStatus = node("div", "acme-client-status");
+    registrationStatus.append(node("span", "status " + (client.status === "deactivated" ? "" : "active"), client.status === "deactivated" ? "Deactivated" : "Registered"));
+    const requests = node("section", "acme-client-requests");
+    requests.id = "acme-client-requests-" + client.id;
+    requests.setAttribute("aria-label", "Recent certificate requests for " + name);
+    requests.hidden = !acmeClientRequestsOpen.has(client.id);
+    const actions = node("div", "acme-client-actions");
+    const toggle = action(requests.hidden ? "View requests ↓" : "Hide requests ↑", () => {
+      requests.hidden = !requests.hidden;
+      if (requests.hidden) acmeClientRequestsOpen.delete(client.id);
+      else acmeClientRequestsOpen.add(client.id);
+      toggle.textContent = requests.hidden ? "View requests ↓" : "Hide requests ↑";
+      toggle.setAttribute("aria-expanded", String(!requests.hidden));
+    });
+    toggle.id = "acme-client-toggle-" + client.id;
+    toggle.setAttribute("aria-controls", requests.id);
+    toggle.setAttribute("aria-expanded", String(!requests.hidden));
+    actions.append(node("span", "row-subtitle", `${orders.length} recent ${orders.length === 1 ? "request" : "requests"}`), toggle);
+    row.append(info, registrationStatus, actions);
+    requests.append(node("h3", "", "Recent certificate requests"));
+    if (!orders.length) requests.append(node("p", "muted", "No recent requests for this client."));
+    orders.forEach(order => {
+      const request = node("div", "acme-client-request");
+      const details = node("div", "acme-request-info");
+      details.append(routeLink(order.domains.join(", "), resourcePath("orders", order.id)), node("span", "row-subtitle", `Requested ${formatDate(order.created_at)} · ${order.staging ? "Staging" : "Production"}`), acmeCertificateExpiry(order));
+      const [label, status] = acmeCertificateStatus(order);
+      request.append(details, node("span", "status " + status, label));
+      if (order.phase && !["valid", "invalid"].includes(order.state)) details.append(node("p", "hint", order.phase));
+      if (order.error) request.append(node("p", "error acme-request-error", order.error));
+      requests.append(request);
+    });
+    const registration = node("details", "acme-registration");
+    registration.open = acmeClientRegistrationOpen.has(client.id);
+    const summary = node("summary", "", "Registration details");
+    summary.id = "acme-client-registration-" + client.id;
+    const values = node("dl", "acme-registration-values");
+    for (const [label, value] of [["Client ID", client.id], ["Contact", contacts.join(", ") || "Not provided"], ["Key fingerprint", client.thumbprint]]) {
+      values.append(node("dt", "", label), node("dd", "", value));
+    }
+    registration.append(summary, values);
+    registration.addEventListener("toggle", () => {
+      // Ignore queued toggle events from rows replaced by a refresh.
+      if (!registration.isConnected) return;
+      if (registration.open) acmeClientRegistrationOpen.add(client.id);
+      else acmeClientRegistrationOpen.delete(client.id);
+    });
+    item.append(row, requests, registration);
+    list.append(item);
+  });
+  if (focusId) $(focusId)?.focus({ preventScroll: true });
+}
 function acmeModeHelp() {
   const mode = $("acme-mode").value;
-  $("acme-mode-help").textContent = mode === "disabled" ? "The ACME endpoint is unavailable. Existing DNS gateway clients and managed certificates continue to work." : "Every requested hostname must pass HTTP-01 verification before issuance. ACME accounts are created automatically; no account approval or gateway token is needed.";
+  $("acme-mode-help").textContent = mode === "disabled" ? "The ACME endpoint is unavailable. Existing DNS gateway clients and managed certificates continue to work." : "Every requested hostname must pass HTTP-01 verification before issuance. Clients register automatically; no gateway token is needed.";
   $("acme-base-url").required = mode !== "disabled";
   $("acme-terms").required = mode !== "disabled";
 }
@@ -1144,7 +1278,10 @@ async function loadAcmeSettings() {
   const result = await api("/acme/settings");
   if (!token || session !== sessionVersion || request !== acmeRequest) return;
   acmeSettingsData = result;
+  $("acme-settings-save").disabled = acmeSettingsSaving;
   const settings = result.settings;
+  $("acme-endpoint-status").textContent = settings.mode === "disabled" ? "Disabled" : "Enabled";
+  $("acme-endpoint-status").className = "status" + (settings.mode === "disabled" ? "" : " active");
   if (!acmeSettingsDirty) {
     $("acme-mode").value = settings.mode;
     $("acme-base-url").value = settings.base_url || location.origin;
@@ -1160,18 +1297,14 @@ async function loadAcmeSettings() {
   $("acme-connection-status").textContent = settings.mode === "disabled" ? "Save an enabled access mode to accept ACME clients." : `${settings.staging ? "Staging: issued certificates will not be browser trusted." : "Production: certificates are issued by Let's Encrypt."} All requested hostnames require HTTP-01 verification. Wildcard certificates are unsupported.`;
   const quote = value => "'" + value.replaceAll("'", "'\"'\"'") + "'";
   $("acme-command").value = directory ? `certbot certonly --standalone --non-interactive --agree-tos \\\n  --server ${quote(directory)} \\\n  --email you@example.com -d ha.example.com \\\n  --issuance-timeout 1200` : "Configure the server URL first.";
-  const accounts = $("acme-account-list"); accounts.replaceChildren();
-  if (!result.accounts.length) empty(accounts, "No ACME accounts yet. Point a client at the directory URL to register.");
-  for (const account of result.accounts) {
-    const row = node("div", "row certificate-row");
-    row.append(identity(account.contact.join(", ") || "ACME account", `${account.id} · ${account.status === "deactivated" ? "Deactivated" : "HTTP-01 required for each order"}`));
-    accounts.append(row);
-  }
+  renderAcmeClients(result);
   const orders = $("acme-order-list"); orders.replaceChildren();
   if (!result.orders.length) empty(orders, "No ACME orders yet");
   for (const order of result.orders) {
     const row = node("div", "row certificate-row");
-    row.append(identity(order.domains.join(", "), `${order.staging ? "Staging" : "Production"} · ${order.state} · ${order.phase}`));
+    const info = identity(order.domains.join(", "), `${order.staging ? "Staging" : "Production"} · ${order.state} · ${order.phase}`);
+    info.append(acmeCertificateExpiry(order));
+    row.append(info);
     if (order.error) row.append(node("p", "error", order.error));
     row.append(routeLink("View details", resourcePath("orders", order.id), "subtle"));
     orders.append(row);
@@ -1183,6 +1316,7 @@ $("acme-settings-refresh").onclick = () => loadAcmeSettings().catch(error => not
 $("orders-refresh").onclick = () => loadAcmeSettings().catch(error => notify(error.message, true));
 $("acme-settings-form").onsubmit = async event => {
   event.preventDefault();
+  acmeSettingsSaving = true;
   const button = event.submitter; button.disabled = true;
   $("acme-settings-error").textContent = "";
   const lines = id => $(id).value.split(/\n/).map(s => s.trim()).filter(Boolean);
@@ -1198,5 +1332,5 @@ $("acme-settings-form").onsubmit = async event => {
     await loadAcmeSettings();
     notify("ACME settings saved.");
   } catch (error) { $("acme-settings-error").textContent = error.message; }
-  finally { button.disabled = false; }
+  finally { acmeSettingsSaving = false; button.disabled = !acmeSettingsData; }
 };

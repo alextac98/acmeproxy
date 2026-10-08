@@ -138,13 +138,33 @@ pub fn router() -> Router<App> {
         .route("/key-change", post(protocol::handle))
 }
 
+fn certificate_expiry(der: Option<&[u8]>, fullchain: Option<&str>) -> Option<i64> {
+    if let Some(der) = der {
+        if let Ok((_, cert)) = x509_parser::parse_x509_certificate(der) {
+            return Some(cert.validity().not_after.timestamp());
+        }
+    }
+    let (_, pem) = x509_parser::pem::parse_x509_pem(fullchain?.as_bytes()).ok()?;
+    Some(pem.parse_x509().ok()?.validity().not_after.timestamp())
+}
+
 pub async fn get_settings(State(app): State<App>) -> api::Result<Json<Value>> {
     let settings = app.config.lock().await.value.acme.clone();
     let accounts = sqlx::query("SELECT id,thumbprint,contact,status,created_at FROM downstream_accounts ORDER BY created_at DESC").fetch_all(&app.db).await?;
-    let orders = sqlx::query("SELECT id,account_id,domains,staging,state,phase,error,created_at FROM acme_orders ORDER BY created_at DESC LIMIT 100").fetch_all(&app.db).await?;
+    let orders = sqlx::query("SELECT id,account_id,domains,staging,state,phase,error,created_at,certificate_der,fullchain,revoked FROM acme_orders ORDER BY created_at DESC LIMIT 100").fetch_all(&app.db).await?;
     Ok(Json(json!({ "settings":settings,
         "accounts": accounts.iter().map(|r|json!({"id":r.get::<String,_>("id"),"thumbprint":r.get::<String,_>("thumbprint"),"contact":serde_json::from_str::<Value>(r.get("contact")).unwrap_or(json!([])),"status":r.get::<String,_>("status"),"created_at":r.get::<i64,_>("created_at")})).collect::<Vec<_>>(),
-        "orders": orders.iter().map(|r|json!({"id":r.get::<String,_>("id"),"account_id":r.get::<String,_>("account_id"),"domains":serde_json::from_str::<Value>(r.get("domains")).unwrap_or(json!([])),"staging":r.get::<bool,_>("staging"),"state":r.get::<String,_>("state"),"phase":r.get::<String,_>("phase"),"error":r.get::<Option<String>,_>("error"),"created_at":r.get::<i64,_>("created_at")})).collect::<Vec<_>>()
+        "orders": orders.iter().map(|r| {
+            let state: String = r.get("state");
+            let der: Option<Vec<u8>> = r.get("certificate_der");
+            let fullchain: Option<String> = r.get("fullchain");
+            let expires_at = if state == "valid" {
+                certificate_expiry(der.as_deref(), fullchain.as_deref())
+            } else {
+                None
+            };
+            json!({"id":r.get::<String,_>("id"),"account_id":r.get::<String,_>("account_id"),"domains":serde_json::from_str::<Value>(r.get("domains")).unwrap_or(json!([])),"staging":r.get::<bool,_>("staging"),"state":state,"phase":r.get::<String,_>("phase"),"error":r.get::<Option<String>,_>("error"),"created_at":r.get::<i64,_>("created_at"),"certificate_expires_at":expires_at,"revoked":r.get::<bool,_>("revoked")})
+        }).collect::<Vec<_>>()
     })))
 }
 

@@ -65,7 +65,7 @@
           <div id="notice" role="status" hidden></div>
           <a id="page-back" class="back-link" hidden>← Back</a>
           <div class="page-heading">
-            <div><h1 id="page-title" tabindex="-1">Overview</h1><p id="page-description" class="page-description"></p></div>
+            <div><div class="page-title-row"><h1 id="page-title" tabindex="-1">Overview</h1><span id="acme-endpoint-status" class="status" hidden>Loading…</span></div><p id="page-description" class="page-description"></p></div>
             <button id="add-button" class="primary" type="button">+ Get a certificate</button>
           </div>
           <section id="overview-panel" class="overview-page" hidden>
@@ -174,16 +174,21 @@
         </div>
       </form>
           </section>
-          <section id="acme-panel" class="settings-page" hidden>
-            <div class="panel settings-card" id="acme-connection-guide"><div class="panel-heading-inline"><h2>Connect an ACME client</h2><a href="/acme-endpoint/configuration" data-route>Configure endpoint →</a></div><p id="acme-connection-status" class="muted"></p>
+          <section id="acme-panel" hidden>
+            <div class="acme-tabs" role="tablist" aria-label="ACME endpoint views">
+              <button type="button" role="tab" id="acme-connection-tab" data-acme-view="connection" aria-controls="acme-connection-panel" aria-selected="true">Connection</button>
+              <button type="button" role="tab" id="acme-settings-tab" data-acme-view="settings" aria-controls="acme-settings-panel" aria-selected="false" tabindex="-1">Settings</button>
+              <button type="button" role="tab" id="acme-clients-tab" data-acme-view="clients" aria-controls="acme-clients-panel" aria-selected="false" tabindex="-1">Clients <span id="acme-client-count" class="badge" aria-hidden="true">0</span></button>
+            </div>
+            <section id="acme-connection-panel" role="tabpanel" aria-labelledby="acme-connection-tab">
+            <div class="panel settings-card" id="acme-connection-guide"><h2>Connect an ACME client</h2><p id="acme-connection-status" class="muted"></p>
               <label for="acme-directory-url">ACME directory URL</label><input id="acme-directory-url" readonly />
               <label for="acme-command">Certbot example</label><textarea id="acme-command" readonly rows="5"></textarea>
-              <p class="hint">Use your domain and email address. The domain must resolve to a server that answers HTTP-01 on port 80, reachable from ACME Proxy. Keep the client's renewal timer enabled. No DNS credentials, gateway token, or account approval are needed.</p>
+              <p class="hint">Use your domain and email address. The domain must resolve to a server that answers HTTP-01 on port 80, reachable from ACME Proxy. Keep the client's renewal timer enabled. Clients register automatically; no DNS credentials or gateway token are needed.</p>
             </div>
-            <div class="panel"><div class="panel-heading"><h2>ACME accounts</h2><button id="acme-settings-refresh" class="subtle" type="button">Refresh ↻</button></div><div id="acme-account-list"></div></div>
-            <a href="/activity/orders" data-route>View ACME orders in Activity →</a>
-          </section>
-          <section id="acme-editor-panel" class="panel settings-card form-page" hidden>
+            </section>
+            <section id="acme-settings-panel" role="tabpanel" aria-labelledby="acme-settings-tab" hidden>
+            <div class="panel settings-card form-page"><h2>Endpoint settings</h2><p class="muted">Control access, certificate authority, and verification restrictions for this endpoint.</p>
             <form id="acme-settings-form">
               <label for="acme-mode">Access mode</label><select id="acme-mode"><option value="disabled">Disabled</option><option value="http01">HTTP-01 verification</option></select><p id="acme-mode-help" class="hint"></p>
               <label for="acme-base-url">Server URL seen by clients</label><input id="acme-base-url" type="url" placeholder="https://acme.example.com" />
@@ -194,8 +199,16 @@
                 <label for="acme-validation-networks">Private HTTP-01 destination networks (optional)</label><textarea id="acme-validation-networks" rows="3" placeholder="10.13.1.0/24"></textarea><p class="hint">Public destinations are allowed. Add only the private networks hosting your challenge endpoints. Leave empty to block private destinations. Link-local and metadata addresses are always blocked.</p>
                 <label for="acme-domains">Allowed certificate domains (optional)</label><textarea id="acme-domains" rows="3" placeholder="example.com&#10;*.example.com"></textarea><p class="hint">Leave empty to allow all domains covered by your DNS connections. A wildcard scope allows individual descendant hostnames, excluding the apex. Wildcard certificates are unsupported by this HTTP-01 endpoint.</p>
               </details><p id="acme-settings-error" class="error" role="alert"></p>
-              <div class="dialog-actions"><a class="secondary" href="/acme-endpoint" data-route>Back to endpoint</a><button type="submit" class="primary">Save ACME settings</button></div>
+              <div class="dialog-actions"><button id="acme-settings-save" type="submit" class="primary" disabled>Save changes</button></div>
             </form>
+            </div>
+            </section>
+            <section id="acme-clients-panel" role="tabpanel" aria-labelledby="acme-clients-tab" hidden>
+              <div class="acme-clients-heading"><div><h2>Registered clients</h2><p class="muted">Clients register automatically when they connect to this endpoint.</p></div><button id="acme-settings-refresh" class="subtle" type="button">Refresh ↻</button></div>
+              <div id="acme-client-list" class="panel"></div>
+              <p class="hint">Request history includes the latest 100 orders across all clients. Expiry describes certificates issued here; it does not confirm which certificate a client currently serves.</p>
+              <p class="hint"><a href="/activity/orders" data-route>View all ACME orders in Activity →</a></p>
+            </section>
           </section>
           <div id="activity-tabs" class="activity-tabs" role="navigation" aria-label="Activity views" hidden><a href="/activity" data-tab="activity">Events</a><a href="/activity/validations" data-tab="challenges">DNS validations</a><a href="/activity/orders" data-tab="orders">ACME orders</a></div>
           <section id="challenges-panel" class="panel" hidden><div class="panel-heading"><h2>Domains</h2><div class="refresh-actions"><span id="refresh-status" role="status" aria-atomic="true"></span><button id="refresh" class="subtle" type="button">Refresh ↻</button></div></div><p class="panel-note">Latest 100 DNS validations, grouped by domain.</p><div id="challenge-filter" class="filter-note" hidden></div><div id="challenge-list"></div></section>

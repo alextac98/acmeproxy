@@ -32,7 +32,7 @@ and states, and local-only interactions. It is stored in
 | --- | --- | --- |
 | Overview | Actionable failures, managed certificate status, connection summary, recent activity | Get a certificate |
 | Certificate methods → Managed certificates | Certificates and private keys managed by this server | Request certificate |
-| Certificate methods → ACME endpoint | Directory URL, HTTP-01 client instructions, accounts, endpoint configuration | Connect ACME client |
+| Certificate methods → ACME endpoint | Connection instructions, endpoint settings, registered clients and certificate expiry | Connection / Settings / Clients |
 | Certificate methods → DNS gateway | Domain-scoped client access, credentials, DNS-01 connection instructions | Create gateway client |
 | Activity → Events | Search administrative and worker events | Search or inspect |
 | Activity → DNS validations | Inspect publishing, propagation context, and cleanup outcomes | Inspect or retry |
@@ -111,7 +111,13 @@ Provider details describe saved credentials as Configured rather than Healthy.
 Saving a token does not establish live provider health. Changes should retain
 the existing handling of outstanding challenges and credential snapshots.
 
-Endpoint configuration belongs beside the endpoint connection guide. Keep
+The ACME endpoint keeps one heading with **Connection**, **Settings**, and **Clients**
+tabs, plus the saved Enabled/Disabled status. Settings uses a local **Save changes**
+action. Clients register automatically and are identified by contact email, with a
+short client ID as the fallback. Their expandable recent requests show actual
+certificate expiry, including expired and revoked states; technical registration
+details stay collapsed. This records certificates issued by the endpoint, without
+claiming to know what a client currently serves. Keep
 network and domain restrictions discoverable through an expandable section,
 with field-level errors and independent save state. Do not hide a failed save or
 silently change security-sensitive values. Wildcard domain scopes and wildcard

@@ -87,6 +87,119 @@ fn ca(fixture: &Fixture) -> Ca {
     }
 }
 
+#[tokio::test]
+async fn admin_reports_certificate_expiry_without_confusing_order_expiry() {
+    let fixture = Fixture::new().await;
+    let app = &fixture.app;
+    let now = crate::now();
+    let future_expiry = now + 90 * 86400;
+    let past_expiry = now - 2 * 86400;
+    let key = rcgen::KeyPair::generate().unwrap();
+    let certificate = |expires| {
+        let mut params = rcgen::CertificateParams::new(vec!["home.example.com".into()]).unwrap();
+        params.not_before = time::OffsetDateTime::from_unix_timestamp(now - 100 * 86400).unwrap();
+        params.not_after = time::OffsetDateTime::from_unix_timestamp(expires).unwrap();
+        params.self_signed(&key).unwrap()
+    };
+    let valid = certificate(future_expiry);
+    let expired = certificate(past_expiry);
+    sqlx::query("INSERT INTO downstream_accounts(id,thumbprint,jwk,contact,created_at) VALUES('client','fingerprint','{}','[\"mailto:tls@example.com\"]',?)")
+        .bind(now).execute(&app.db).await.unwrap();
+    for (id, state, der, fullchain, revoked, expected) in [
+        (
+            "valid",
+            "valid",
+            Some(valid.der().to_vec()),
+            None,
+            false,
+            Some(future_expiry),
+        ),
+        (
+            "expired",
+            "valid",
+            Some(expired.der().to_vec()),
+            None,
+            false,
+            Some(past_expiry),
+        ),
+        (
+            "revoked",
+            "valid",
+            Some(valid.der().to_vec()),
+            None,
+            true,
+            Some(future_expiry),
+        ),
+        (
+            "legacy",
+            "valid",
+            None,
+            Some(valid.pem()),
+            false,
+            Some(future_expiry),
+        ),
+        (
+            "fallback",
+            "valid",
+            Some(vec![0]),
+            Some(valid.pem()),
+            false,
+            Some(future_expiry),
+        ),
+        ("missing", "valid", None, None, false, None),
+        (
+            "malformed",
+            "valid",
+            Some(vec![0]),
+            Some("invalid PEM".into()),
+            false,
+            None,
+        ),
+        (
+            "processing",
+            "processing",
+            Some(valid.der().to_vec()),
+            None,
+            false,
+            None,
+        ),
+    ] {
+        sqlx::query("INSERT INTO clients(id,name,token_hash,scopes,created_at,managed) VALUES(?,?,?,'[]',?,1)")
+            .bind(id).bind(id).bind(security::hash(id)).bind(now).execute(&app.db).await.unwrap();
+        sqlx::query("INSERT INTO acme_orders(id,account_id,domains,staging,state,certificate_der,fullchain,revoked,next_attempt,expires_at,created_at,updated_at) VALUES(?,'client','[\"home.example.com\"]',0,?,?,?,?,0,?,?,?)")
+            .bind(id).bind(state).bind(der).bind(fullchain).bind(revoked)
+            .bind(now + 86400).bind(now).bind(now).execute(&app.db).await.unwrap();
+        let response = api::router(app.clone())
+            .oneshot(
+                Request::builder()
+                    .uri("/api/admin/acme/settings")
+                    .header("authorization", "Bearer admin")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = response.into_body().collect().await.unwrap().to_bytes();
+        let data: Value = serde_json::from_slice(&body).unwrap();
+        let order = data["orders"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|order| order["id"] == id)
+            .unwrap();
+        assert_eq!(order["certificate_expires_at"], json!(expected), "{id}");
+        assert_eq!(order["revoked"], revoked, "{id}");
+        for field in ["certificate_der", "fullchain", "csr"] {
+            assert!(
+                order.get(field).is_none(),
+                "certificate material must not be returned in metadata"
+            );
+        }
+        assert_eq!(data["accounts"][0]["contact"][0], "mailto:tls@example.com");
+    }
+}
+
 fn csr_for(names: Vec<String>, key: &rcgen::KeyPair) -> rcgen::CertificateSigningRequest {
     let mut params = rcgen::CertificateParams::new(names).unwrap();
     params.distinguished_name = rcgen::DistinguishedName::new();

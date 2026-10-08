@@ -99,6 +99,8 @@ pub fn router(app: App) -> Router {
         .route("/certificates/new", get(admin_page))
         .route("/certificates/{id}", get(admin_page))
         .route("/acme-endpoint", get(admin_page))
+        .route("/acme-endpoint/settings", get(admin_page))
+        .route("/acme-endpoint/clients", get(admin_page))
         .route("/acme-endpoint/configuration", get(admin_page))
         .route("/validations", get(admin_page))
         .route("/activity", get(admin_page))

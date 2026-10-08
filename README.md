@@ -147,7 +147,7 @@ before reducing it. This is the application audit log, not raw server stdout.
 
 ## Internal ACME endpoint (Certbot and other ACME clients)
 
-Open **ACME endpoint → Configure endpoint** to enable **HTTP-01 verification**.
+Open **ACME endpoint → Settings** to enable **HTTP-01 verification**.
 Point clients at `http://YOUR-SERVER:8080/acme/directory` (use an HTTPS reverse proxy for
 clients that require TLS). Configure DNS credentials once on this server; clients keep
 their own keys and use standard ACME issuance and renewal, with no DNS plugin, gateway
@@ -158,6 +158,10 @@ Every hostname must pass HTTP-01; network membership alone never authorizes issu
 Optional domain scopes further restrict eligible names. Only HTTP-01 is offered;
 clients restricted to DNS-01 or TLS-ALPN-01 cannot use this endpoint.
 The endpoint starts disabled and defaults to Let's Encrypt staging when enabled.
+The **Connection** tab provides the directory URL and client instructions. **Clients**
+lists automatic registrations and each client's recent certificate requests, including
+certificate expiry dates and expired or revoked status. Expiry comes from the issued
+certificate; it does not confirm which certificate the client currently serves.
 
 [ACME setup, Certbot, Home Assistant, and protocol details](docs/ACME.md)
 

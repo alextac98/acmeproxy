@@ -122,18 +122,20 @@ test("gateway clients open their own scoped connection instructions", async ({ p
 
 test("bookmarked editors and order details reload, and old validation links remain valid", async ({ page }) => {
   await fixture(page);
-  for (const [path, title] of [
+  for (const [path, title, canonical = path] of [
     ["/providers/new", "Connect DNS provider"],
     ["/providers/dns/edit", "Edit DNS provider"],
     ["/certificates/new", "Request certificate"],
     ["/dns-gateway/new", "Create gateway client"],
-    ["/acme-endpoint/configuration", "Configure ACME endpoint"],
+    ["/acme-endpoint/configuration", "ACME endpoint", "/acme-endpoint/settings"],
+    ["/acme-endpoint/settings", "ACME endpoint"],
+    ["/acme-endpoint/clients", "ACME endpoint"],
     ["/activity/orders/order", "api.example.com"],
   ]) {
     expect((await page.goto(path)).status()).toBe(200);
     await signIn(page);
     await expect(page.locator("#page-title")).toHaveText(title);
-    await expect(page).toHaveURL(new RegExp(path + "$"));
+    await expect(page).toHaveURL(new RegExp(canonical + "$"));
   }
   await expect(page.locator("#detail-panel")).toContainText("HTTP-01 verification failed");
   await page.reload();
