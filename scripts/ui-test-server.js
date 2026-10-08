@@ -10,9 +10,10 @@ fs.writeFileSync(
   "browser-test-admin-token-not-for-deployment",
 );
 const home = path.resolve(".local/acme.sh");
+const listen = process.env.ACMEPROXY_UI_TEST_LISTEN || "127.0.0.1:18080";
 fs.writeFileSync(
   path.join(root, "config.toml"),
-  `[server]\nlisten = "127.0.0.1:18080"\ndnsapi_home = ${JSON.stringify(home)}\n`,
+  `[server]\nlisten = ${JSON.stringify(listen)}\ndnsapi_home = ${JSON.stringify(home)}\n`,
 );
 const child = spawn("target/debug/acmeproxy", ["serve", "--config-dir", root], {
   stdio: "inherit",

@@ -9,20 +9,31 @@ domain-scoped gateway credentials to services that manage their own certificates
 
 ## Three ways to obtain a certificate
 
-1. **DNS proxy:** your ACME client obtains the certificate directly from Let's Encrypt.
+1. **DNS gateway:** your ACME client obtains the certificate directly from Let's Encrypt.
    It uses an Acme Proxy client ID/token to ask this server to publish and clean up
    DNS-01 records. Your client keeps its private key and handles renewal.
-2. **Managed certificates:** request through the authenticated **Certificates** UI or
+2. **Managed certificates:** request through the authenticated **Managed certificates** UI or
    admin API. Acme Proxy generates and stores the private key, obtains the certificate,
    and renews it automatically. Download the key/chain and install them on your service.
-3. **HTTP-01 ACME endpoint:** point an ordinary HTTP-01-capable client at our ACME
+3. **ACME endpoint:** point an ordinary HTTP-01-capable client at our ACME
    directory URL. The client proves control of every hostname through HTTP-01; Acme Proxy
    then obtains a Let's Encrypt certificate using its DNS credentials. No gateway token
    or account approval is needed. The client keeps its private key and handles renewal;
    Acme Proxy stores the certificate chain for download, never the client's private key.
 
 All three require configured DNS provider coverage for the requested domains. Wildcards
-work through the DNS proxy and managed certificates; the HTTP-01 endpoint rejects them.
+work through the DNS gateway and managed certificates; the HTTP-01 endpoint rejects them.
+
+Administration opens on **Overview**, with setup guidance, managed certificate status,
+failures, connections, and recent events. **Get a certificate** compares all three
+methods. Each method has its own sidebar destination and explains certificate issuance,
+private key storage, renewal, and validation directly beneath the page heading.
+Open certificate, gateway client, or provider details to find their available actions.
+These pages and their forms support direct links, reloads, and browser Back.
+
+**Activity** groups Events, DNS validations, and ACME orders. **Settings** contains
+activity retention and service configuration guidance. Existing `/clients` and
+`/validations` bookmarks open DNS gateway and Activity → DNS validations respectively.
 
 **Development preview.** The gateway and worker lifecycle are tested with a local fake
 DNS provider. The catalog contains 184 available acme.sh adapters; those providers have
@@ -128,7 +139,7 @@ actor, target, and outcome. Search by action, actor, target, or outcome and brow
 page. Older pages stay in place while new events arrive; use Latest to return
 to the newest events.
 
-Set **Keep last N events** in the viewer or `server.audit_retention` in
+Set **Keep last N events** in **Settings** or `server.audit_retention` in
 `config.toml` (default 1000, range 50–100000). UI changes are saved immediately;
 file edits apply on restart. Older events are automatically deleted as new ones
 arrive, and reducing the limit prunes existing history. The UI asks for confirmation
@@ -136,7 +147,7 @@ before reducing it. This is the application audit log, not raw server stdout.
 
 ## Internal ACME endpoint (Certbot and other ACME clients)
 
-Open **Settings** to enable **HTTP-01 verification**.
+Open **ACME endpoint → Configure endpoint** to enable **HTTP-01 verification**.
 Point clients at `http://YOUR-SERVER:8080/acme/directory` (use an HTTPS reverse proxy for
 clients that require TLS). Configure DNS credentials once on this server; clients keep
 their own keys and use standard ACME issuance and renewal, with no DNS plugin, gateway
@@ -152,7 +163,7 @@ The endpoint starts disabled and defaults to Let's Encrypt staging when enabled.
 
 ## Managed certificates
 
-Configure a DNS provider connection for your zone, open **Certificates**, and choose
+Configure a DNS provider connection for your zone, open **Managed certificates**, and choose
 **Request certificate**. Enter up to 20 domains (including wildcards), choose a trusted
 Let's Encrypt certificate or an untrusted staging test certificate, and accept the
 subscriber agreement. Certificate requesters do not need DNS credentials, gateway client
@@ -170,7 +181,7 @@ including up to 10 minutes of propagation checking per challenge. Failed attempt
 DNS cleanup and retry with backoff. Initial issuance stops after five failed attempts;
 use **Retry** after fixing the problem. Failed renewals continue retrying daily after
 those attempts, keeping the last issued certificate available. Failed DNS cleanup remains
-visible in **DNS validations** for retry. Repeated identical domain sets return the existing
+visible in **Activity → DNS validations** for retry. Repeated identical domain sets return the existing
 certificate request rather than create another order. At most 100 managed certificates
 are stored per instance.
 

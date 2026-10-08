@@ -35,202 +35,64 @@
     </div>
     <div id="workspace" class="workspace" hidden>
       <aside>
-        <a href="/providers" class="brand"
-          ><img class="brand-mark" src="/brand/icon.png" alt="" width="1254" height="1254" /> ACME Proxy</a
-        >
-        <nav aria-label="Main navigation">
-          <a href="/providers" data-tab="providers" class="selected">DNS providers</a>
-          <a href="/certificates" data-tab="certificates">Certificates</a>
-          <a href="/clients" data-tab="clients">Clients</a>
-          <a href="/validations" data-tab="challenges">DNS validations</a>
-          <a href="/activity" data-tab="activity">Activity</a>
-          <a href="/settings" data-tab="settings">Settings</a>
+        <div class="aside-heading">
+          <a href="/overview" class="brand"><img class="brand-mark" src="/brand/icon.png" alt="" width="1254" height="1254" /> ACME Proxy</a>
+          <button id="menu-toggle" class="menu-toggle" type="button" aria-controls="main-navigation" aria-expanded="false">Menu</button>
+        </div>
+        <nav id="main-navigation" aria-label="Main navigation">
+          <a href="/overview" data-tab="overview"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 3h7v7H3zm11 0h7v7h-7zM3 14h7v7H3zm11 0h7v7h-7z"/></svg><span>Overview</span></a>
+          <span class="nav-heading">Certificate methods</span>
+          <a href="/certificates" data-tab="certificates"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 8 4v6c0 5-8 8-8 8s-8-3-8-8V7zM8 12l3 3 5-6"/></svg><span>Managed certificates<small>Issue &amp; renew here</small></span></a>
+          <a href="/acme-endpoint" data-tab="acme"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 3v5m8-5v5M6 8h12v4a6 6 0 0 1-12 0zm6 10v3"/></svg><span>ACME endpoint<small>Connect via HTTP-01</small></span></a>
+          <a href="/dns-gateway" data-tab="clients"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a18 18 0 0 1 0 18 18 18 0 0 1 0-18"/></svg><span>DNS gateway<small>Publish DNS-01 records</small></span></a>
+          <a href="/activity" data-tab="activity"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg><span>Activity</span></a>
+          <span class="nav-heading">Configuration</span>
+          <a href="/providers" data-tab="providers"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v18M3 12h18"/><circle cx="12" cy="12" r="9"/></svg><span>DNS providers</span></a>
+          <a href="/settings" data-tab="settings"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 3-1 3-3 1v4l-2 1 2 2v3l3 1 1 3h6l1-3 3-1v-3l2-2-2-1V7l-3-1-1-3z"/><circle cx="12" cy="12" r="3"/></svg><span>Settings</span></a>
         </nav>
         <div class="aside-bottom">
           <a id="app-version" class="app-version" target="_blank" rel="noreferrer">Version unavailable</a>
           <div class="utility-actions">
-            <a class="utility-icon" href="/about" data-tab="about" aria-label="About" title="About ACME Proxy">
-              <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v6m0-10h.01"/></svg>
-            </a>
-            <a class="utility-icon report-problem" href="https://github.com/alextac98/acmeproxy/issues/new/choose" target="_blank" rel="noreferrer" aria-label="Report a problem" title="Report a problem">
-              <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 11.5a8.5 8.5 0 0 1-8.5 8.5 9 9 0 0 1-4-.9L3 21l1.9-5.5a9 9 0 0 1-.9-4A8.5 8.5 0 0 1 12.5 3H13a8.5 8.5 0 0 1 8 8v.5Z"/><path d="M12 7v5m0 4h.01"/></svg>
-            </a>
-            <button id="logout" class="utility-icon" type="button" aria-label="Sign out" title="Sign out">
-              <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4m7 14 5-5-5-5m5 5H9"/></svg>
-            </button>
+            <a class="utility-icon utility-label" href="/about" data-tab="about" aria-label="About" title="About ACME Proxy">Help &amp; about</a>
+            <a class="utility-icon report-problem" href="https://github.com/alextac98/acmeproxy/issues/new/choose" target="_blank" rel="noreferrer" aria-label="Report a problem" title="Report a problem"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 11.5a8.5 8.5 0 0 1-8.5 8.5 9 9 0 0 1-4-.9L3 21l1.9-5.5a9 9 0 0 1-.9-4A8.5 8.5 0 0 1 12.5 3H13a8.5 8.5 0 0 1 8 8v.5Z"/><path d="M12 7v5m0 4h.01"/></svg></a>
+            <button id="logout" class="utility-icon" type="button" aria-label="Sign out" title="Sign out"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4m7 14 5-5-5-5m5 5H9"/></svg></button>
           </div>
         </div>
       </aside>
       <main>
+        <header class="workspace-bar"><div id="breadcrumb">Administration / Overview</div><span>Self-hosted · Administration</span></header>
         <div class="content">
           <div id="notice" role="status" hidden></div>
+          <a id="page-back" class="back-link" hidden>← Back</a>
           <div class="page-heading">
-            <div>
-              <h1 id="page-title">DNS providers</h1>
-            </div>
-            <button id="add-button" class="primary">+ Add provider</button>
+            <div><h1 id="page-title" tabindex="-1">Overview</h1><p id="page-description" class="page-description"></p></div>
+            <button id="add-button" class="primary" type="button">+ Get a certificate</button>
           </div>
-          <section id="gateway-summary" class="stats" aria-label="Gateway summary">
-            <div>
-              <span>DNS providers</span><strong id="provider-count">0</strong
-              >
-            </div>
-            <div>
-              <span>Authorized clients</span><strong id="client-count">0</strong
-              >
-            </div>
-            <div>
-              <span>Open challenges</span><strong id="challenge-count">0</strong
-              ><small id="challenge-note" hidden></small>
+          <section id="overview-panel" class="overview-page" hidden>
+            <section id="setup-guide" class="panel settings-card" hidden>
+              <h2>Get your first certificate</h2><p class="muted">Start with DNS access, then choose who manages the certificate and its private key.</p>
+              <ol class="setup-steps"><li><a href="/providers/new" data-route>Connect a DNS provider</a><span>Give ACME Proxy access to the domains you want to validate.</span></li><li><a href="/certificate-methods" data-route>Choose a certificate method</a><span>Issue here, connect an ACME client, or use the DNS gateway.</span></li><li><a href="/activity" data-route>Inspect issuance activity</a><span>Follow verification and resolve any errors.</span></li></ol>
+            </section>
+            <div id="overview-attention" class="attention-list"></div>
+            <section id="overview-certificates-panel" class="panel"><div class="panel-heading"><h2>Managed certificates</h2><a href="/certificates" data-route>View all →</a></div><div id="overview-certificate-list"></div></section>
+            <div class="overview-columns">
+              <section class="panel"><div class="panel-heading"><h2>Connections</h2></div><div id="overview-connections"></div></section>
+              <section class="panel"><div class="panel-heading"><h2>Recent activity</h2><a href="/activity" data-route>View all →</a></div><div id="overview-activity"></div></section>
             </div>
           </section>
-          <section id="settings-panel" class="settings-page" aria-label="ACME settings" hidden>
-            <div class="panel settings-card">
-              <h2>ACME endpoint</h2>
-              <p class="muted">Let Certbot and other ACME clients verify their hostnames through HTTP-01. Clients keep their private keys; this server obtains Let's Encrypt certificates using your DNS provider connections.</p>
-              <form id="acme-settings-form">
-                <label for="acme-mode">Access mode</label>
-                <select id="acme-mode"><option value="disabled">Disabled</option><option value="http01">HTTP-01 verification</option></select>
-                <p id="acme-mode-help" class="hint"></p>
-                <label for="acme-base-url">Server URL seen by clients</label>
-                <input id="acme-base-url" type="url" placeholder="http://10.13.1.240:8080" />
-                <label for="acme-networks">Allowed client networks</label>
-                <textarea id="acme-networks" rows="4" placeholder="10.13.1.0/24"></textarea>
-                <p class="hint">One network CIDR per line. Behind a reverse proxy, also restrict clients at the proxy, because this server sees the proxy's address. Network access never bypasses HTTP-01 verification.</p>
-                <label for="acme-validation-networks">Private HTTP-01 destination networks (optional)</label>
-                <textarea id="acme-validation-networks" rows="3" placeholder="10.13.1.0/24"></textarea>
-                <p class="hint">Public destinations are allowed. Add only the private networks hosting your challenge endpoints. Leave empty to block private destinations. Link-local and metadata addresses are always blocked.</p>
-                <label for="acme-domains">Allowed certificate domains (optional)</label>
-                <textarea id="acme-domains" rows="3" placeholder="example.com&#10;*.example.com"></textarea>
-                <p class="hint">Leave empty to allow all domains covered by your DNS connections. A wildcard scope allows individual descendant hostnames, excluding the apex. Wildcard certificates are unsupported by this HTTP-01 endpoint.</p>
-                <label for="acme-environment">Upstream certificate authority</label>
-                <select id="acme-environment"><option value="staging">Let's Encrypt staging — test certificates</option><option value="production">Let's Encrypt production — trusted certificates</option></select>
-                <label class="checkbox-label"><input id="acme-terms" type="checkbox" /> I accept the <a href="https://letsencrypt.org/repository/" target="_blank" rel="noreferrer">Let's Encrypt subscriber agreement ↗</a> for certificates requested through this endpoint.</label>
-                <p id="acme-settings-error" class="error" role="alert"></p>
-                <div class="dialog-actions"><button type="submit" class="primary">Save ACME settings</button></div>
-              </form>
-            </div>
-            <div class="panel settings-card">
-              <h2>Connect a client</h2>
-              <p id="acme-connection-status" class="muted"></p>
-              <label for="acme-directory-url">ACME directory URL</label><input id="acme-directory-url" readonly />
-              <label for="acme-command">Certbot example</label><textarea id="acme-command" readonly rows="5"></textarea>
-              <p class="hint">Use your domain and email address. The domain must resolve to a server that answers HTTP-01 on port 80, reachable from ACME Proxy. Keep the client's renewal timer enabled. No DNS credentials, gateway token, or account approval are needed.</p>
-            </div>
-            <div class="panel"><div class="panel-heading"><h2>ACME accounts</h2><button id="acme-settings-refresh" class="subtle" type="button">Refresh ↻</button></div><div id="acme-account-list"></div></div>
-            <div class="panel"><div class="panel-heading"><h2>Recent ACME orders</h2></div><div id="acme-order-list"></div></div>
+          <section id="methods-panel" hidden>
+            <div id="method-list" class="method-grid"></div><p class="hint">All three methods need DNS provider coverage. You can use more than one method on this server.</p>
           </section>
-          <section id="about-panel" class="about-page" aria-label="About ACME Proxy" hidden>
-            <div class="panel about-intro">
-              <img class="brand-logo" src="/brand/logo.png" alt="ACME Proxy" width="2172" height="724" />
-              <h2>One place for DNS access.</h2>
-              <p>ACME Proxy connects your certificate tools to your DNS providers. Keep provider credentials in one place and give each service access to just the domains it needs.</p>
-              <p class="muted">Self-hosted and open source. Issue and renew certificates here, or let your services manage their own certificates through the DNS gateway.</p>
-              <div class="about-links">
-                <a class="primary" href="https://github.com/alextac98/acmeproxy" target="_blank" rel="noreferrer">View source on GitHub ↗</a>
-                <a class="secondary report-problem" href="https://github.com/alextac98/acmeproxy/issues/new/choose" target="_blank" rel="noreferrer">Report a problem ↗</a>
-              </div>
-              <dl class="about-build">
-                <div><dt>Version</dt><dd id="about-version">Unavailable</dd></div>
-                <div><dt>Build</dt><dd id="about-build">Unavailable</dd></div>
-                <div><dt>License</dt><dd><a href="https://github.com/alextac98/acmeproxy/blob/main/LICENSE" target="_blank" rel="noreferrer">MIT ↗</a></dd></div>
-              </dl>
-              <p class="about-credit">Made with <svg class="credit-heart" viewBox="0 0 24 24" width="16" height="16" fill="currentColor" role="img" aria-label="love"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1.1-1.1a5.5 5.5 0 0 0-7.8 7.8L12 21l8.8-8.6a5.5 5.5 0 0 0 0-7.8Z"/></svg> by <a href="https://alextac.com" target="_blank" rel="noreferrer">Alex Tacescu</a> and <a href="https://github.com/alextac98/acmeproxy/graphs/contributors" target="_blank" rel="noreferrer">contributors</a>.</p>
-            </div>
-            <details class="panel about-attributions">
-              <summary>Attributions</summary>
-              <div>
-                <p><a href="https://github.com/acmesh-official/acme.sh" target="_blank" rel="noreferrer">acme.sh ↗</a><br />The DNS adapters that connect ACME Proxy to provider APIs.</p>
-                <p><a href="https://github.com/MadCamel/acmeproxy.pl" target="_blank" rel="noreferrer">acmeproxy.pl ↗</a><br />The original inspiration for this project!</p>
-                <p class="muted">Third-party components retain their upstream licenses.</p>
-              </div>
-            </details>
+          <section id="providers-panel" class="panel" hidden><div class="panel-heading"><h2>Provider connections</h2></div><div id="provider-list"></div></section>
+          <section id="certificates-panel" hidden>
+            <p class="method-link">Using a certificate client? <a href="/certificate-methods" data-route>Compare the three certificate methods →</a></p>
+            <div class="panel"><div class="panel-heading"><h2>Managed certificates</h2></div><div id="certificate-list"></div></div>
+            <p class="hint">Renewal runs automatically here. Deliver renewed files to your services using downloads or the API.</p>
           </section>
-          <section id="providers-panel" class="panel">
-            <div class="panel-heading">
-              <h2>Provider connections</h2>
-            </div>
-            <div id="provider-list"></div>
-          </section>
-          <section id="certificates-panel" class="panel" hidden>
-            <div class="panel-heading"><h2>Managed certificates</h2></div>
-            <p class="panel-note">Request a Let's Encrypt certificate using your configured DNS connections. Validation, cleanup, and renewal run automatically. Download renewed certificates here or retrieve them through the API.</p>
-            <div id="certificate-list"></div>
-          </section>
-          <section id="clients-panel" class="panel" hidden>
-            <div class="panel-heading">
-              <h2>Client access</h2>
-            </div>
-            <div id="client-list"></div>
-            <details id="revoked-clients" hidden>
-              <summary>Revoked clients (<span id="revoked-client-count">0</span>)</summary>
-              <div id="revoked-client-list"></div>
-            </details>
-          </section>
-          <section id="challenges-panel" class="panel" hidden>
-            <div class="panel-heading">
-              <h2>Domains</h2>
-              <div class="refresh-actions">
-                <span id="refresh-status" role="status" aria-atomic="true"></span>
-                <button id="refresh" class="subtle">Refresh ↻</button>
-              </div>
-            </div>
-            <p class="panel-note">
-              Latest 100 DNS validations, grouped by domain.
-            </p>
-            <div id="challenge-list"></div>
-          </section>
-          <section id="activity-panel" class="panel" hidden>
-            <div class="panel-heading">
-              <h2>Activity log</h2>
-              <div class="refresh-actions">
-                <span id="activity-status" role="status" aria-atomic="true"></span>
-                <button id="activity-refresh" class="subtle">Refresh ↻</button>
-              </div>
-            </div>
-            <div class="activity-toolbar">
-              <form id="activity-search-form">
-                <label for="activity-search">Search events</label>
-                <div class="activity-control">
-                  <input id="activity-search" type="search" maxlength="200" placeholder="Action, actor, target, or outcome" />
-                  <button class="secondary" type="submit">Search</button>
-                </div>
-              </form>
-              <form id="activity-retention-form">
-                <label for="activity-retention">Keep last N events</label>
-                <div class="activity-control">
-                  <input id="activity-retention" type="number" min="50" max="100000" step="1" required value="1000" />
-                  <button class="secondary" type="submit" disabled>Save limit</button>
-                </div>
-              </form>
-            </div>
-            <p id="activity-empty" class="empty" hidden>No events yet</p>
-            <div id="activity-table" class="activity-table" role="region" aria-label="Activity events" tabindex="0">
-              <table>
-                <thead><tr><th scope="col">Time</th><th scope="col">Action</th><th scope="col">Actor</th><th scope="col">Target</th><th scope="col">Outcome</th></tr></thead>
-                <tbody id="audit-list"></tbody>
-              </table>
-            </div>
-            <div class="activity-pagination">
-              <span id="activity-count" role="status"></span>
-              <div class="row-actions">
-                <button id="activity-latest" class="subtle" disabled>Latest</button>
-                <button id="activity-newer" class="subtle" disabled>← Newer</button>
-                <button id="activity-older" class="subtle" disabled>Older →</button>
-              </div>
-            </div>
-          </section>
-        </div>
-      </main>
-    </div>
-    <dialog id="provider-dialog">
+          <section id="clients-panel" class="panel" hidden><div class="panel-heading"><h2>Gateway clients</h2></div><div id="client-list"></div><details id="revoked-clients" hidden><summary>Revoked clients (<span id="revoked-client-count">0</span>)</summary><div id="revoked-client-list"></div></details></section>
+          <section id="detail-panel" class="detail-page" hidden></section>
+          <section id="provider-editor-panel" class="panel settings-card form-page" hidden>
       <form id="provider-form">
-        <div class="dialog-heading">
-          <h2 id="provider-dialog-title">Add DNS provider</h2>
-          <button type="button" class="close" aria-label="Close dialog">
-            ×
-          </button>
-        </div>
         <input id="provider-id" type="hidden" /><label for="provider-name"
           >Connection name</label
         ><input
@@ -263,14 +125,13 @@
         <div id="credential-fields"></div>
         <p id="provider-error" class="error" role="alert"></p>
         <div class="dialog-actions">
-          <button type="button" class="secondary close">Cancel</button
+          <button type="button" class="secondary" data-cancel-editor>Cancel</button
           ><button type="submit" class="primary">Save provider</button>
         </div>
       </form>
-    </dialog>
-    <dialog id="certificate-dialog">
+          </section>
+          <section id="certificate-editor-panel" class="panel settings-card form-page" hidden>
       <form id="certificate-form">
-        <div class="dialog-heading"><h2>Request certificate</h2><button type="button" class="close" aria-label="Close dialog">×</button></div>
         <label for="certificate-domains">Domains</label>
         <textarea id="certificate-domains" required rows="4" placeholder="example.com&#10;*.example.com"></textarea>
         <p class="hint">One domain per line, up to 20. Each domain must be covered by an existing DNS provider connection. Wildcards are supported.</p>
@@ -279,17 +140,11 @@
         <label class="checkbox-label"><input id="certificate-terms" type="checkbox" required /> I agree to the <a href="https://letsencrypt.org/repository/" target="_blank" rel="noreferrer">Let's Encrypt subscriber agreement ↗</a>.</label>
         <p class="hint">Renewal is automatic while this service runs. Installing renewed certificates on your services requires downloading or retrieving them through the API.</p>
         <p id="certificate-error" class="error" role="alert"></p>
-        <div class="dialog-actions"><button type="button" class="secondary close">Cancel</button><button type="submit" class="primary">Request certificate</button></div>
+        <div class="dialog-actions"><button type="button" class="secondary" data-cancel-editor>Cancel</button><button type="submit" class="primary">Request certificate</button></div>
       </form>
-    </dialog>
-    <dialog id="client-dialog">
+          </section>
+          <section id="client-editor-panel" class="panel settings-card form-page" hidden>
       <form id="client-form">
-        <div class="dialog-heading">
-          <h2>Add client</h2>
-          <button type="button" class="close" aria-label="Close dialog">
-            ×
-          </button>
-        </div>
         <label for="client-name">Client name</label
         ><input
           id="client-name"
@@ -314,10 +169,80 @@
         </p>
         <p id="client-error" class="error" role="alert"></p>
         <div class="dialog-actions">
-          <button type="button" class="secondary close">Cancel</button
+          <button type="button" class="secondary" data-cancel-editor>Cancel</button
           ><button type="submit" class="primary">Create client</button>
         </div>
       </form>
+          </section>
+          <section id="acme-panel" class="settings-page" hidden>
+            <div class="panel settings-card" id="acme-connection-guide"><div class="panel-heading-inline"><h2>Connect an ACME client</h2><a href="/acme-endpoint/configuration" data-route>Configure endpoint →</a></div><p id="acme-connection-status" class="muted"></p>
+              <label for="acme-directory-url">ACME directory URL</label><input id="acme-directory-url" readonly />
+              <label for="acme-command">Certbot example</label><textarea id="acme-command" readonly rows="5"></textarea>
+              <p class="hint">Use your domain and email address. The domain must resolve to a server that answers HTTP-01 on port 80, reachable from ACME Proxy. Keep the client's renewal timer enabled. No DNS credentials, gateway token, or account approval are needed.</p>
+            </div>
+            <div class="panel"><div class="panel-heading"><h2>ACME accounts</h2><button id="acme-settings-refresh" class="subtle" type="button">Refresh ↻</button></div><div id="acme-account-list"></div></div>
+            <a href="/activity/orders" data-route>View ACME orders in Activity →</a>
+          </section>
+          <section id="acme-editor-panel" class="panel settings-card form-page" hidden>
+            <form id="acme-settings-form">
+              <label for="acme-mode">Access mode</label><select id="acme-mode"><option value="disabled">Disabled</option><option value="http01">HTTP-01 verification</option></select><p id="acme-mode-help" class="hint"></p>
+              <label for="acme-base-url">Server URL seen by clients</label><input id="acme-base-url" type="url" placeholder="https://acme.example.com" />
+              <label for="acme-environment">Upstream certificate authority</label><select id="acme-environment"><option value="staging">Let's Encrypt staging — test certificates</option><option value="production">Let's Encrypt production — trusted certificates</option></select>
+              <label class="checkbox-label"><input id="acme-terms" type="checkbox" /> I accept the <a href="https://letsencrypt.org/repository/" target="_blank" rel="noreferrer">Let's Encrypt subscriber agreement ↗</a> for certificates requested through this endpoint.</label>
+              <details class="advanced-settings"><summary>Network and domain restrictions</summary>
+                <label for="acme-networks">Allowed client networks</label><textarea id="acme-networks" rows="3" placeholder="10.13.1.0/24"></textarea><p class="hint">One network CIDR per line. Behind a reverse proxy, also restrict clients at the proxy, because this server sees the proxy's address. Network access never bypasses HTTP-01 verification.</p>
+                <label for="acme-validation-networks">Private HTTP-01 destination networks (optional)</label><textarea id="acme-validation-networks" rows="3" placeholder="10.13.1.0/24"></textarea><p class="hint">Public destinations are allowed. Add only the private networks hosting your challenge endpoints. Leave empty to block private destinations. Link-local and metadata addresses are always blocked.</p>
+                <label for="acme-domains">Allowed certificate domains (optional)</label><textarea id="acme-domains" rows="3" placeholder="example.com&#10;*.example.com"></textarea><p class="hint">Leave empty to allow all domains covered by your DNS connections. A wildcard scope allows individual descendant hostnames, excluding the apex. Wildcard certificates are unsupported by this HTTP-01 endpoint.</p>
+              </details><p id="acme-settings-error" class="error" role="alert"></p>
+              <div class="dialog-actions"><a class="secondary" href="/acme-endpoint" data-route>Back to endpoint</a><button type="submit" class="primary">Save ACME settings</button></div>
+            </form>
+          </section>
+          <div id="activity-tabs" class="activity-tabs" role="navigation" aria-label="Activity views" hidden><a href="/activity" data-tab="activity">Events</a><a href="/activity/validations" data-tab="challenges">DNS validations</a><a href="/activity/orders" data-tab="orders">ACME orders</a></div>
+          <section id="challenges-panel" class="panel" hidden><div class="panel-heading"><h2>Domains</h2><div class="refresh-actions"><span id="refresh-status" role="status" aria-atomic="true"></span><button id="refresh" class="subtle" type="button">Refresh ↻</button></div></div><p class="panel-note">Latest 100 DNS validations, grouped by domain.</p><div id="challenge-filter" class="filter-note" hidden></div><div id="challenge-list"></div></section>
+          <section id="orders-panel" class="panel" hidden><div class="panel-heading"><h2>Recent ACME orders</h2><button id="orders-refresh" class="subtle" type="button">Refresh ↻</button></div><p class="panel-note">Latest 100 orders from the HTTP-01 ACME endpoint. Your ACME client keeps its private keys and handles renewal.</p><div id="acme-order-list"></div></section>
+          <section id="activity-panel" class="panel" hidden>
+            <div class="panel-heading"><h2>Activity log</h2><div class="refresh-actions"><span id="activity-status" role="status" aria-atomic="true"></span><button id="activity-refresh" class="subtle" type="button">Refresh ↻</button></div></div>
+            <div class="activity-toolbar"><form id="activity-search-form"><label for="activity-search">Search events</label><div class="activity-control"><input id="activity-search" type="search" maxlength="200" placeholder="Action, actor, target, or outcome" /><button class="secondary" type="submit">Search</button></div></form></div>
+            <p id="activity-empty" class="empty" hidden>No events yet</p><div id="activity-table" class="activity-table" role="region" aria-label="Activity events" tabindex="0"><table><thead><tr><th scope="col">Time</th><th scope="col">Action</th><th scope="col">Actor</th><th scope="col">Target</th><th scope="col">Outcome</th></tr></thead><tbody id="audit-list"></tbody></table></div>
+            <div class="activity-pagination"><span id="activity-count" role="status"></span><div class="row-actions"><button id="activity-latest" class="subtle" disabled>Latest</button><button id="activity-newer" class="subtle" disabled>← Newer</button><button id="activity-older" class="subtle" disabled>Older →</button></div></div>
+          </section>
+          <section id="settings-panel" class="settings-page" hidden>
+            <div class="panel settings-card"><h2>Activity retention</h2><p class="muted">Control how much administrative event history this instance retains.</p><form id="activity-retention-form"><label for="activity-retention">Keep last N events</label><div class="activity-control"><input id="activity-retention" type="number" min="50" max="100000" step="1" required value="1000" /><button class="secondary" type="submit" disabled>Save limit</button></div></form><p id="activity-retention-error" class="error" role="alert"></p><p class="hint">Reducing the limit permanently removes older events. DNS validation history is managed separately.</p></div>
+            <div class="panel settings-card"><h2>Service configuration</h2><p class="muted">Server listening address, adapter paths, worker timeouts, and DNS resolvers are configured in <code>config.toml</code>. Restart the service after editing the file.</p><p class="hint"><a href="/acme-endpoint" data-route>ACME endpoint configuration and connection instructions →</a></p></div>
+          </section>
+          <section id="about-panel" class="about-page" aria-label="About ACME Proxy" hidden>
+            <div class="panel about-intro">
+              <img class="brand-logo" src="/brand/logo.png" alt="ACME Proxy" width="2172" height="724" />
+              <h2>One place for DNS access.</h2>
+              <p>ACME Proxy connects your certificate tools to your DNS providers. Keep provider credentials in one place and give each service access to just the domains it needs.</p>
+              <p class="muted">Self-hosted and open source. Issue and renew certificates here, or let your services manage their own certificates through the DNS gateway.</p>
+              <div class="about-links">
+                <a class="primary" href="https://github.com/alextac98/acmeproxy" target="_blank" rel="noreferrer">View source on GitHub ↗</a>
+                <a class="secondary report-problem" href="https://github.com/alextac98/acmeproxy/issues/new/choose" target="_blank" rel="noreferrer">Report a problem ↗</a>
+              </div>
+              <dl class="about-build">
+                <div><dt>Version</dt><dd id="about-version">Unavailable</dd></div>
+                <div><dt>Build</dt><dd id="about-build">Unavailable</dd></div>
+                <div><dt>License</dt><dd><a href="https://github.com/alextac98/acmeproxy/blob/main/LICENSE" target="_blank" rel="noreferrer">MIT ↗</a></dd></div>
+              </dl>
+              <p class="about-credit">Made with <svg class="credit-heart" viewBox="0 0 24 24" width="16" height="16" fill="currentColor" role="img" aria-label="love"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1.1-1.1a5.5 5.5 0 0 0-7.8 7.8L12 21l8.8-8.6a5.5 5.5 0 0 0 0-7.8Z"/></svg> by <a href="https://alextac.com" target="_blank" rel="noreferrer">Alex Tacescu</a> and <a href="https://github.com/alextac98/acmeproxy/graphs/contributors" target="_blank" rel="noreferrer">contributors</a>.</p>
+            </div>
+            <details class="panel about-attributions">
+              <summary>Attributions</summary>
+              <div>
+                <p><a href="https://github.com/acmesh-official/acme.sh" target="_blank" rel="noreferrer">acme.sh ↗</a><br />The DNS adapters that connect ACME Proxy to provider APIs.</p>
+                <p><a href="https://github.com/MadCamel/acmeproxy.pl" target="_blank" rel="noreferrer">acmeproxy.pl ↗</a><br />The original inspiration for this project!</p>
+                <p class="muted">Third-party components retain their upstream licenses.</p>
+              </div>
+            </details>
+          </section>
+        </div>
+      </main>
+    </div>
+    <dialog id="download-dialog" aria-labelledby="download-title">
+      <div class="dialog-heading"><h2 id="download-title">Download certificate files</h2><button type="button" class="close" aria-label="Close dialog">×</button></div>
+      <p class="hint">Download the latest stored files and install them on your service. Keep the private key secure.</p>
+      <div id="download-options" class="detail-actions"></div>
     </dialog>
     <dialog id="token-dialog">
       <div class="dialog-heading">
