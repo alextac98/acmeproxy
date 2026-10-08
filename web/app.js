@@ -796,6 +796,7 @@ $("provider-form").onsubmit = async (event) => {
       credentials,
     });
     $("provider-form").reset();
+    editorRoute = null;
     await refresh();
     navigate(resourcePath("providers", result.id));
     notify("Provider saved.");

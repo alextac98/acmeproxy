@@ -164,3 +164,56 @@ test("provider drafts survive refresh and a missing edit route cannot create a n
   await expect(page.locator("#page-title")).toHaveText("Provider unavailable");
   await expect(page.getByRole("button", { name: "Save provider" })).not.toBeVisible();
 });
+
+test("provider editors reload saved values when returning with browser Back", async ({ page }) => {
+  const { overview } = await fixture(page);
+  // A second adapter makes a reset driver's incorrect default observable.
+  overview.drivers.push({ id: "dns_aws", name: "Amazon Route 53", docs: "", fields: [{ key: "AWS_ACCESS_KEY_ID", label: "Access key" }] });
+  await page.route("**/api/admin/providers/dns", async route => {
+    expect(route.request().method()).toBe("PUT");
+    const body = route.request().postDataJSON();
+    expect(body.credentials).toEqual({});
+    Object.assign(overview.providers[0], { name: body.name, zone: body.zone, driver: body.driver });
+    await route.fulfill({ json: { id: "dns" } });
+  });
+  await page.route("**/api/admin/providers", async route => {
+    expect(route.request().method()).toBe("POST");
+    const body = route.request().postDataJSON();
+    expect(body.credentials).toEqual({ CF_Token: "new-test-credential" });
+    overview.providers.push({ id: "created", name: body.name, zone: body.zone, driver: body.driver });
+    await route.fulfill({ json: { id: "created" } });
+  });
+  await page.goto("/providers/dns/edit");
+  await signIn(page);
+  await page.getByLabel("Connection name").fill("Updated production DNS");
+  await page.getByLabel("Zone", { exact: true }).fill("updated.example.com");
+  await page.getByRole("button", { name: "Save provider", exact: true }).click();
+  await expect(page).toHaveURL(/\/providers\/dns$/);
+  await page.goBack();
+  await expect(page).toHaveURL(/\/providers\/dns\/edit$/);
+  await expect(page.getByLabel("Connection name")).toHaveValue("Updated production DNS");
+  await expect(page.getByLabel("Zone", { exact: true })).toHaveValue("updated.example.com");
+  await expect(page.getByLabel("DNS provider", { exact: true })).toHaveValue("dns_cf");
+  await expect(page.locator("#provider-id")).toHaveValue("dns");
+  await expect(page.getByLabel("CF_Token", { exact: true })).toHaveValue("");
+  await page.getByLabel("Connection name").fill("Unsaved follow-up edit");
+  await page.evaluate(() => refresh());
+  await expect(page.getByLabel("Connection name")).toHaveValue("Unsaved follow-up edit");
+
+  await page.locator("#page-back").click();
+  await page.locator("#page-back").click();
+  await page.locator("#add-button").click();
+  await expect(page).toHaveURL(/\/providers\/new$/);
+  await page.getByLabel("Connection name").fill("New DNS connection");
+  await page.getByLabel("Zone", { exact: true }).fill("new.example.com");
+  await page.getByLabel("CF_Token", { exact: true }).fill("new-test-credential");
+  await page.getByRole("button", { name: "Save provider", exact: true }).click();
+  await expect(page).toHaveURL(/\/providers\/created$/);
+  await page.goBack();
+  await expect(page).toHaveURL(/\/providers\/new$/);
+  await expect(page.getByLabel("Connection name")).toHaveValue("");
+  await expect(page.getByLabel("Zone", { exact: true })).toHaveValue("");
+  await expect(page.locator("#provider-id")).toHaveValue("");
+  await expect(page.getByLabel("DNS provider", { exact: true })).toHaveValue("dns_cf");
+  await expect(page.getByLabel("CF_Token", { exact: true })).toHaveValue("");
+});
