@@ -3,6 +3,7 @@ pub mod api;
 pub mod build_info;
 pub mod certificates;
 pub mod config;
+mod dns;
 pub mod provider;
 pub mod security;
 pub mod store;

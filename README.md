@@ -94,11 +94,29 @@ dnsapi_home = "../.local/acme.sh" # Relative to the configuration directory, or 
 challenge_ttl_seconds = 3600
 worker_timeout_seconds = 30
 audit_retention = 1000 # Keep the newest N activity events (50–100000)
+dns01_resolvers = [] # Empty or omitted: use system DNS for TXT propagation checks
 ```
 
 The UI writes the same file using atomic replacement. Manual edits take effect on
 restart. If the file changes externally while the server is running, UI saves are
 blocked until restart. Saves normalize formatting and replace comments.
+
+### Split-horizon DNS and DNS-01 propagation
+
+Internal DNS may return NXDOMAIN for TXT records successfully published to public
+DNS. Set `server.dns01_resolvers` to recursive resolvers that see the public records,
+for example `dns01_resolvers = ["1.1.1.1", "8.8.8.8"]`, then restart. Omitted or
+empty (`[]`) retains system DNS; no public service is selected implicitly.
+Entries must be IPv4 or IPv6 literals (e.g. `"2606:4700:4700::1111"`), without
+ports, brackets, URLs, or hostnames. Invalid entries, including empty strings,
+prevent configuration loading. Allow outbound UDP and TCP DNS on port 53.
+
+This setting applies only to upstream DNS-01 TXT propagation for **both managed
+certificates and the internal ACME endpoint**. Resolver caching is disabled during
+propagation. Downstream HTTP-01 continues using system DNS and existing destination
+network policy, so private hostnames remain reachable. System DNS and DNS gateway
+clients' own propagation checks are unchanged. Public authoritative DNS must still
+expose the records to the CA; this does not bypass CA validation.
 
 For file-only provisioning, append providers and clients:
 

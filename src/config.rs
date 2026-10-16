@@ -9,6 +9,7 @@ use sqlx::{Row, Sqlite, Transaction};
 use std::{
     collections::{BTreeMap, HashSet},
     io::Write,
+    net::IpAddr,
     path::{Path, PathBuf},
 };
 
@@ -31,6 +32,8 @@ pub struct Server {
     pub challenge_ttl_seconds: i64,
     pub worker_timeout_seconds: u64,
     pub audit_retention: i64,
+    /// DNS-01 propagation only; an empty list retains system resolvers.
+    pub dns01_resolvers: Vec<IpAddr>,
 }
 impl Default for Server {
     fn default() -> Self {
@@ -40,6 +43,7 @@ impl Default for Server {
             challenge_ttl_seconds: 3600,
             worker_timeout_seconds: 30,
             audit_retention: 1000,
+            dns01_resolvers: Vec::new(),
         }
     }
 }
