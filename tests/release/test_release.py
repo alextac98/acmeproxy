@@ -18,6 +18,101 @@ def metadata():
             'run_id': '123', 'attempt': '1', 'previous_image': ''}
 
 
+class PreflightTests(unittest.TestCase):
+    def setUp(self):
+        self.directory = tempfile.TemporaryDirectory()
+        self.addCleanup(self.directory.cleanup)
+        self.root = Path(self.directory.name)
+        self.git('init', '-q')
+        self.commit_version('0.1.0')
+        self.event = self.root / 'event.json'
+        self.event.write_text(json.dumps({'before': self.git('rev-parse', 'HEAD')}))
+        self.outputs = self.root / 'outputs'
+        self.enterContext(patch.object(release, 'ROOT', self.root))
+        self.enterContext(patch.dict(release.os.environ, {
+            'GITHUB_REF': 'refs/heads/main', 'GITHUB_REPOSITORY': 'alextac98/acmeproxy',
+            'GITHUB_EVENT_NAME': 'push', 'GITHUB_EVENT_PATH': str(self.event),
+            'GITHUB_OUTPUT': str(self.outputs), 'GITHUB_RUN_ID': '123',
+        }))
+        self.api = self.enterContext(patch.object(release, 'api', return_value=None))
+        self.find_release = self.enterContext(patch.object(release, 'find_release', return_value=None))
+        self.releases = self.enterContext(patch.object(release, 'releases', return_value=[]))
+
+    def git(self, *args):
+        return release.run('git', *args, cwd=self.root)
+
+    def commit_version(self, version):
+        (self.root / 'Cargo.toml').write_text(f'[package]\nname = "acmeproxy"\nversion = "{version}"\n')
+        (self.root / 'Cargo.lock').write_text(f'[[package]]\nname = "acmeproxy"\nversion = "{version}"\n')
+        self.commit('Version ' + version)
+
+    def commit(self, message):
+        self.git('add', 'Cargo.toml', 'Cargo.lock')
+        self.git('-c', 'user.name=Test', '-c', 'user.email=test@example.com', 'commit', '-qm', message)
+
+    def test_stable_and_prerelease_bumps_start_releases(self):
+        for version in ('0.1.1', '0.2.0-beta.1', '0.2.0'):
+            with self.subTest(version=version):
+                self.commit_version(version)
+                self.outputs.write_text('')
+                release.preflight()
+                self.assertIn('should_release=true\n', self.outputs.read_text())
+                self.assertIn(f'version={version}\n', self.outputs.read_text())
+
+    def test_dependency_change_skips_release_before_querying_github(self):
+        manifest = self.root / 'Cargo.toml'
+        manifest.write_text(manifest.read_text() + '\n[dependencies]\nanyhow = "1"\n')
+        self.commit('Update dependencies')
+        release.preflight()
+        self.assertEqual(self.outputs.read_text(), 'should_release=false\n')
+        self.api.assert_not_called()
+        self.find_release.assert_not_called()
+        self.releases.assert_not_called()
+
+    def test_bump_before_last_commit_in_push_starts_release(self):
+        self.commit_version('0.1.1')
+        manifest = self.root / 'Cargo.toml'
+        manifest.write_text(manifest.read_text() + '\n[dependencies]\nanyhow = "1"\n')
+        self.commit('Update dependencies after bump')
+        release.preflight()
+        self.assertIn('should_release=true\n', self.outputs.read_text())
+        self.assertIn('version=0.1.1\n', self.outputs.read_text())
+
+    def test_version_decrease_is_rejected(self):
+        self.commit_version('0.0.9')
+        with self.assertRaisesRegex(ValueError, 'must exceed the previous version'):
+            release.preflight()
+        self.api.assert_not_called()
+        self.assertFalse(self.outputs.exists())
+
+    def test_bump_with_stale_lockfile_is_rejected(self):
+        manifest = self.root / 'Cargo.toml'
+        manifest.write_text(manifest.read_text().replace('0.1.0', '0.1.1'))
+        self.commit('Bump without updating lockfile')
+        with self.assertRaisesRegex(ValueError, 'Cargo.lock is stale'):
+            release.preflight()
+        self.api.assert_not_called()
+
+    def test_manual_dispatch_does_not_require_a_version_change(self):
+        self.event.unlink()
+        with patch.dict(release.os.environ, {'GITHUB_EVENT_NAME': 'workflow_dispatch'}):
+            release.preflight()
+        self.assertIn('should_release=true\n', self.outputs.read_text())
+        self.assertIn('version=0.1.0\n', self.outputs.read_text())
+
+    def test_first_push_to_main_can_release(self):
+        self.event.write_text(json.dumps({'before': '0' * 40}))
+        release.preflight()
+        self.assertIn('should_release=true\n', self.outputs.read_text())
+
+    def test_automatic_release_rejects_existing_version_tag(self):
+        self.commit_version('0.1.1')
+        self.api.return_value = {'object': {}}
+        with self.assertRaisesRegex(ValueError, 'Version tag already exists'):
+            release.preflight()
+        self.assertFalse(self.outputs.exists())
+
+
 class ReleaseTests(unittest.TestCase):
     def test_project_version_comes_from_manifest_and_checks_generated_lock(self):
         with tempfile.TemporaryDirectory() as tmp:

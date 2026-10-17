@@ -1,12 +1,14 @@
 # Release ACME Proxy
 
-`main` is staging. Releases are deliberate snapshots: merging code does not publish anything.
+`main` is staging. A push or merge to `main` that increases `package.version` in `Cargo.toml` automatically starts a release. Other changes do not publish anything.
 
 ## Make a release
 
 1. Test your changes on `main`, including a real DNS provider when relevant.
 2. Set `package.version` in `Cargo.toml`, the single source of truth. Run `cargo check` to refresh `Cargo.lock`, then commit and push both to `main`. Use a version newer than the last release.
-3. In GitHub Actions, select **Release → Run workflow → main**. There are no inputs or follow-up workflows.
+3. The **Release** workflow starts automatically. Follow its progress in GitHub Actions; no manual dispatch is needed.
+
+The version is compared with the state before the entire push, so a bump anywhere in a multi-commit push is detected. Dependency-only edits to `Cargo.toml` skip the release. **Release → Run workflow → main** remains available to start a release manually if needed.
 
 The workflow runs CI, builds AMD64/ARM64 images, and tests installation, upgrades, and backup/restore with mocked DNS. It then publishes the Git tag, versioned GHCR image, and GitHub release with installation instructions and a deployment kit. Stable releases also update `latest`; prereleases do not.
 

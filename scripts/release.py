@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Manual GHCR releases from main. Only the release subcommand writes remotely."""
+"""GHCR releases from main. Only the release subcommand writes remotely."""
 import argparse
 import hashlib
 import json
@@ -111,6 +111,19 @@ def preflight():
     require(os.environ['GITHUB_REF'] == 'refs/heads/main', 'Release must run from main')
     repo = os.environ['GITHUB_REPOSITORY']
     version = project_version()
+    if os.environ.get('GITHUB_EVENT_NAME') == 'push':
+        event = json.loads(Path(os.environ['GITHUB_EVENT_PATH']).read_text())
+        before = event['before']
+        require(re.fullmatch(r'[0-9a-f]{40}', before), 'Invalid previous commit')
+        if before != '0' * 40:
+            # Compare the whole push, which may contain several commits.
+            manifest = run('git', 'show', f'{before}:Cargo.toml', cwd=ROOT)
+            previous_version = tomllib.loads(manifest)['package']['version']
+            if version == previous_version:
+                print('Package version is unchanged; skipping release')
+                output({'should_release': 'false'})
+                return
+            require(version_key(version) > version_key(previous_version), 'New version must exceed the previous version')
     require(api(f'repos/{repo}/git/ref/tags/v{version}', optional=True) is None, 'Version tag already exists')
     require(find_release(repo, 'v' + version) is None, 'Release already exists; rerun failed jobs in its original workflow or use a new version')
     published = releases(repo)
@@ -124,7 +137,7 @@ def preflight():
             validate(meta)
             require(meta['image'] == 'ghcr.io/' + repo.lower(), 'Previous release image belongs to another repository')
             previous = meta['image'] + '@' + meta['digest']
-    output({'version': version, 'image': 'ghcr.io/' + repo.lower(), 'previous': previous,
+    output({'should_release': 'true', 'version': version, 'image': 'ghcr.io/' + repo.lower(), 'previous': previous,
             'build_tag': f"{version}-build-{os.environ['GITHUB_RUN_ID']}"})
 
 
