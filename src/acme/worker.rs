@@ -140,9 +140,9 @@ pub(super) async fn issue(
 pub(crate) async fn process_one(app: &App) -> anyhow::Result<bool> {
     process_one_with(app, |id, staging| async move {
         let account = certificates::account(app, staging).await?;
-        let mut builder = hickory_resolver::TokioResolver::builder_tokio()?;
-        builder.options_mut().cache_size = 0;
-        issue(app, &id, account, &builder.build()).await
+        let server = app.config.lock().await.value.server.clone();
+        let resolver = crate::dns::propagation_resolver(&server.dns01_resolvers)?;
+        issue(app, &id, account, &resolver).await
     })
     .await
 }
