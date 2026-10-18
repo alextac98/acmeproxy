@@ -324,11 +324,24 @@ pub(crate) async fn present(
             .fetch_optional(&app.db)
             .await?;
     if let Some(row) = &existing {
-        anyhow::ensure!(
-            row.get::<String, _>("client_id") == id,
-            "challenge belongs to another client"
-        );
         let state: &str = row.get("state");
+        let owner: &str = row.get("client_id");
+        if owner != id {
+            // A CA may reuse an authorization across internal orders. Only a
+            // fully cleaned internal job can change owners: never steal live
+            // DNS work or cross the external gateway client boundary.
+            let internal: bool = sqlx::query_scalar(
+                "SELECT EXISTS(SELECT 1 FROM clients old JOIN clients new ON new.id=? WHERE old.id=? AND old.managed=1 AND new.managed=1 AND new.revoked=0)",
+            )
+            .bind(id)
+            .bind(owner)
+            .fetch_one(&app.db)
+            .await?;
+            anyhow::ensure!(
+                state == "cleaned" && internal,
+                "challenge belongs to another client"
+            );
+        }
         if matches!(state, "active" | "present_pending") {
             return Ok(row.get("id"));
         }
@@ -353,7 +366,7 @@ pub(crate) async fn present(
         .as_ref()
         .map(|r| r.get::<String, _>("id"))
         .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
-    sqlx::query("INSERT INTO challenges(id,client_id,provider_id,credentials_snapshot,fqdn,value,state,operation,next_attempt,expires_at,created_at,updated_at) VALUES(?,?,?,?,?,?,'present_pending','present',?,?,?,?) ON CONFLICT(fqdn,value) DO UPDATE SET provider_id=excluded.provider_id,credentials_snapshot=excluded.credentials_snapshot,state='present_pending',operation='present',attempts=0,next_attempt=excluded.next_attempt,expires_at=excluded.expires_at,updated_at=excluded.updated_at,worker_state=NULL,last_error=NULL")
+    sqlx::query("INSERT INTO challenges(id,client_id,provider_id,credentials_snapshot,fqdn,value,state,operation,next_attempt,expires_at,created_at,updated_at) VALUES(?,?,?,?,?,?,'present_pending','present',?,?,?,?) ON CONFLICT(fqdn,value) DO UPDATE SET client_id=excluded.client_id,provider_id=excluded.provider_id,credentials_snapshot=excluded.credentials_snapshot,state='present_pending',operation='present',attempts=0,next_attempt=excluded.next_attempt,expires_at=excluded.expires_at,updated_at=excluded.updated_at,worker_state=NULL,last_error=NULL")
         .bind(&challenge_id).bind(id).bind(provider.get::<String,_>("id")).bind(provider.get::<Vec<u8>,_>("credentials"))
         .bind(fqdn).bind(value).bind(now()).bind(now()+JOB_TIMEOUT as i64+600).bind(now()).bind(now()).execute(&app.db).await?;
     app.wake.notify_one();

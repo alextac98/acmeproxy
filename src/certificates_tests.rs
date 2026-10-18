@@ -800,3 +800,131 @@ async fn managed_owner_cannot_authenticate_and_survives_config_reload() {
     let mut tx = app.db.begin().await.unwrap();
     assert!(config::sync(&mut tx, &next).await.is_err());
 }
+
+// ACME servers may reuse a pending authorization (and its TXT value) across
+// downstream orders. A completed cleanup must not pin that value to the old job.
+#[tokio::test]
+async fn cleaned_internal_challenge_can_move_to_new_owner_and_cleanup() {
+    let fixture = Fixture::new().await;
+    for task in &fixture.tasks {
+        task.abort();
+    }
+    let app = &fixture.app;
+    let old = fixture.create(&["home.example.com"]).await;
+    let new = fixture
+        .create(&["home.example.com", "other.example.com"])
+        .await;
+    let fqdn = "_acme-challenge.home.example.com";
+    let value = security::random_secret();
+    let challenge = present(app, &old, fqdn, &value).await.unwrap();
+    assert!(store::process_one(app).await.unwrap());
+    cleanup(app, &old).await.unwrap();
+    assert!(store::process_one(app).await.unwrap());
+    assert_eq!(
+        std::fs::read_to_string(fixture.directory.path().join("records")).unwrap(),
+        ""
+    );
+
+    let reused = present(app, &new, fqdn, &value).await.unwrap();
+    assert_eq!(reused, challenge);
+    let row = sqlx::query("SELECT client_id,state,operation,attempts,worker_state,last_error FROM challenges WHERE id=?")
+        .bind(&challenge).fetch_one(&app.db).await.unwrap();
+    assert_eq!(row.get::<String, _>("client_id"), new);
+    assert_eq!(row.get::<String, _>("state"), "present_pending");
+    assert_eq!(row.get::<String, _>("operation"), "present");
+    assert_eq!(row.get::<i64, _>("attempts"), 0);
+    assert!(row.get::<Option<Vec<u8>>, _>("worker_state").is_none());
+    assert!(row.get::<Option<String>, _>("last_error").is_none());
+    assert!(store::process_one(app).await.unwrap());
+    assert_eq!(present(app, &new, fqdn, &value).await.unwrap(), challenge);
+    // Late cleanup from the previous order must not remove the new presentation.
+    cleanup(app, &old).await.unwrap();
+    assert!(!store::process_one(app).await.unwrap());
+    assert!(
+        std::fs::read_to_string(fixture.directory.path().join("records"))
+            .unwrap()
+            .contains(&value)
+    );
+    cleanup(app, &new).await.unwrap();
+    assert!(store::process_one(app).await.unwrap());
+    assert_eq!(
+        std::fs::read_to_string(fixture.directory.path().join("records")).unwrap(),
+        ""
+    );
+}
+
+#[tokio::test]
+async fn internal_challenge_reuse_preserves_inflight_and_gateway_ownership() {
+    let fixture = Fixture::new().await;
+    for task in &fixture.tasks {
+        task.abort();
+    }
+    let app = &fixture.app;
+    let old = fixture.create(&["home.example.com"]).await;
+    let new = fixture
+        .create(&["home.example.com", "other.example.com"])
+        .await;
+    let fqdn = "_acme-challenge.home.example.com";
+    let value = security::random_secret();
+    let challenge = present(app, &old, fqdn, &value).await.unwrap();
+    for state in ["present_pending", "active", "cleanup_pending", "failed"] {
+        sqlx::query("UPDATE challenges SET state=? WHERE id=?")
+            .bind(state)
+            .bind(&challenge)
+            .execute(&app.db)
+            .await
+            .unwrap();
+        assert!(
+            present(app, &new, fqdn, &value)
+                .await
+                .unwrap_err()
+                .to_string()
+                .contains("another client")
+        );
+        let owner: String = sqlx::query_scalar("SELECT client_id FROM challenges WHERE id=?")
+            .bind(&challenge)
+            .fetch_one(&app.db)
+            .await
+            .unwrap();
+        assert_eq!(owner, old);
+    }
+    sqlx::query("UPDATE challenges SET state='cleaned' WHERE id=?")
+        .bind(&challenge)
+        .execute(&app.db)
+        .await
+        .unwrap();
+    // A revoked internal destination cannot acquire even a cleaned job.
+    sqlx::query("UPDATE clients SET revoked=1 WHERE id=?")
+        .bind(&new)
+        .execute(&app.db)
+        .await
+        .unwrap();
+    assert!(present(app, &new, fqdn, &value).await.is_err());
+    sqlx::query("UPDATE clients SET revoked=0 WHERE id=?")
+        .bind(&new)
+        .execute(&app.db)
+        .await
+        .unwrap();
+    // Neither side of a cleaned transfer may be an external gateway client.
+    for (old_managed, new_managed) in [(false, true), (true, false), (false, false)] {
+        sqlx::query("UPDATE clients SET managed=? WHERE id=?")
+            .bind(old_managed)
+            .bind(&old)
+            .execute(&app.db)
+            .await
+            .unwrap();
+        sqlx::query("UPDATE clients SET managed=? WHERE id=?")
+            .bind(new_managed)
+            .bind(&new)
+            .execute(&app.db)
+            .await
+            .unwrap();
+        assert!(
+            present(app, &new, fqdn, &value)
+                .await
+                .unwrap_err()
+                .to_string()
+                .contains("another client")
+        );
+    }
+}

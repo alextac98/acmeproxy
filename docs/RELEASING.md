@@ -1,12 +1,14 @@
 # Release ACME Proxy
 
-`main` is staging. Releases are deliberate snapshots: merging code does not publish anything.
+`main` is staging. Every push or merge to `main` checks `package.version` in `Cargo.toml` against the repository's existing release tags. If the version is newer than every `vX.Y.Z` or supported prerelease tag, the workflow automatically starts a release. Versions at or below the highest tag skip the release successfully, so ordinary pushes do not need a version bump.
 
 ## Make a release
 
 1. Test your changes on `main`, including a real DNS provider when relevant.
-2. Set `package.version` in `Cargo.toml`, the single source of truth. Run `cargo check` to refresh `Cargo.lock`, then commit and push both to `main`. Use a version newer than the last release.
-3. In GitHub Actions, select **Release → Run workflow → main**. There are no inputs or follow-up workflows.
+2. Set `package.version` in `Cargo.toml`, the single source of truth. Run `cargo check` to refresh `Cargo.lock`, then commit and push both to `main`. Use a version newer than every existing release tag.
+3. The **Release** workflow starts automatically. Follow its progress in GitHub Actions; no manual dispatch is needed.
+
+Tags are the source of truth, including tags that do not have a GitHub release. The comparison uses semantic version order, not commit history or changed files; a push can release an untagged newer version even if that push does not edit `Cargo.toml`. **Release → Run workflow → main** uses the same tag check when started manually.
 
 The workflow runs CI, builds AMD64/ARM64 images, and tests installation, upgrades, and backup/restore with mocked DNS. It then publishes the Git tag, versioned GHCR image, and GitHub release with installation instructions and a deployment kit. Stable releases also update `latest`; prereleases do not.
 
@@ -18,7 +20,7 @@ The GHCR package must be **Public** (Packages → acmeproxy → Package settings
 
 Fix transient issues and **rerun failed jobs in the same workflow run**. This preserves the already-tested image digests and lets an interrupted publication finish. An incomplete draft may briefly exist while assets upload; the workflow publishes it automatically.
 
-If code needs changing, fix it on `main`. If the failed attempt already created a version tag or release, use a new patch version. Never overwrite a published version. A new workflow run or “rerun all jobs” will reject an existing version.
+If code needs changing, fix it on `main`. If the failed attempt already created a version tag or release, use a new patch version. Never overwrite a published version. A new workflow run or “rerun all jobs” skips an already-tagged version; an existing draft without a tag must be finished by rerunning failed jobs in its original workflow or superseded with a new version.
 
 ## Release tooling
 

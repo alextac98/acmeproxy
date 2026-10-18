@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Manual GHCR releases from main. Only the release subcommand writes remotely."""
+"""GHCR releases from main. Only the release subcommand writes remotely."""
 import argparse
 import hashlib
 import json
@@ -65,6 +65,12 @@ def all_releases(repo):
     return [r for page in pages for r in page]
 
 
+def version_tags(repo):
+    pages = json.loads(run('gh', 'api', f'repos/{repo}/tags?per_page=100', '--paginate', '--slurp'))
+    return [tag['name'][1:] for page in pages for tag in page
+            if tag['name'].startswith('v') and VERSION.fullmatch(tag['name'][1:])]
+
+
 def releases(repo):
     return [r for r in all_releases(repo) if not r['draft'] and VERSION.fullmatch(r['tag_name'].removeprefix('v'))]
 
@@ -111,20 +117,25 @@ def preflight():
     require(os.environ['GITHUB_REF'] == 'refs/heads/main', 'Release must run from main')
     repo = os.environ['GITHUB_REPOSITORY']
     version = project_version()
-    require(api(f'repos/{repo}/git/ref/tags/v{version}', optional=True) is None, 'Version tag already exists')
+    tags = version_tags(repo)
+    if tags:
+        latest_tag = max(tags, key=version_key)
+        if version_key(version) <= version_key(latest_tag):
+            print(f'Version {version} does not exceed latest tag v{latest_tag}; skipping release')
+            output({'should_release': 'false'})
+            return
     require(find_release(repo, 'v' + version) is None, 'Release already exists; rerun failed jobs in its original workflow or use a new version')
     published = releases(repo)
     previous = ''
     if published:
         latest = max(published, key=lambda r: version_key(r['tag_name'][1:]))
-        require(version_key(version) > version_key(latest['tag_name'][1:]), 'New version must exceed published versions')
         with tempfile.TemporaryDirectory() as tmp:
             run('gh', 'release', 'download', latest['tag_name'], '--repo', repo, '--pattern', 'release.json', '--dir', tmp)
             meta = json.loads((Path(tmp) / 'release.json').read_text())
             validate(meta)
             require(meta['image'] == 'ghcr.io/' + repo.lower(), 'Previous release image belongs to another repository')
             previous = meta['image'] + '@' + meta['digest']
-    output({'version': version, 'image': 'ghcr.io/' + repo.lower(), 'previous': previous,
+    output({'should_release': 'true', 'version': version, 'image': 'ghcr.io/' + repo.lower(), 'previous': previous,
             'build_tag': f"{version}-build-{os.environ['GITHUB_RUN_ID']}"})
 
 
@@ -192,7 +203,7 @@ def release(args):
             'image': args.image, 'digest': digest(source), 'run_id': os.environ['GITHUB_RUN_ID'],
             'attempt': os.environ['GITHUB_RUN_ATTEMPT'], 'previous_image': args.previous}
     validate(meta)
-    require(all(version_key(r['tag_name'][1:]) <= version_key(version) for r in releases(repo)),
+    require(all(version_key(tag) <= version_key(version) for tag in version_tags(repo)),
             'Refusing to move release channels backwards')
     existing = find_release(repo, meta['tag'])
     if existing:

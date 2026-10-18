@@ -1,5 +1,7 @@
 name: Release
 on:
+  push:
+    branches: [main]
   workflow_dispatch:
 permissions:
   contents: read
@@ -11,6 +13,7 @@ jobs:
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
     outputs:
+      should_release: ${{ steps.meta.outputs.should_release }}
       version: ${{ steps.meta.outputs.version }}
       image: ${{ steps.meta.outputs.image }}
       build_tag: ${{ steps.meta.outputs.build_tag }}
@@ -28,6 +31,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
   checks:
     needs: preflight
+    if: needs.preflight.outputs.should_release == 'true'
     uses: ./.github/workflows/ci.yml
   image:
     needs: [preflight, checks]

@@ -320,6 +320,19 @@ async fn standard_acme_client_keeps_private_key_and_uses_upstream_dns01() {
     assert_eq!(order.state().status, OrderStatus::Processing);
     let upstream = ca(&fixture);
     let account = upstream.account().await;
+    // The upstream CA can reuse the first pending DNS authorization from an
+    // earlier order whose DNS job was already cleaned. Seed that retained row
+    // to exercise re-presentation through the actual HTTP-01 issuance worker.
+    let previous = uuid::Uuid::new_v4().to_string();
+    sqlx::query("INSERT INTO clients(id,name,token_hash,scopes,created_at,managed) VALUES(?,'ACME order previous',?,'[\"example.com\"]',?,1)")
+        .bind(&previous).bind(security::hash(&security::random_secret())).bind(crate::now()).execute(&app.db).await.unwrap();
+    let reused_value = B64.encode(security::hash(&format!(
+        "token-0-0.{}",
+        account.key_thumbprint()
+    )));
+    let reused_job = uuid::Uuid::new_v4().to_string();
+    sqlx::query("INSERT INTO challenges(id,client_id,provider_id,credentials_snapshot,fqdn,value,state,operation,next_attempt,expires_at,created_at,updated_at) SELECT ?,?,id,credentials,'_acme-challenge.example.com',?,'cleaned','cleanup',0,0,0,0 FROM providers")
+        .bind(&reused_job).bind(&previous).bind(&reused_value).execute(&app.db).await.unwrap();
     // Simulate a disconnect after upstream finalization. Retrying uses the saved CSR and order.
     upstream.state.lock().unwrap().fail_download = true;
     worker::process_one_with(app, |id, _| {
@@ -330,6 +343,19 @@ async fn standard_acme_client_keeps_private_key_and_uses_upstream_dns01() {
     .await
     .unwrap();
     assert_eq!(upstream.state.lock().unwrap().finalized, 1);
+    let owner: String = sqlx::query_scalar("SELECT client_id FROM challenges WHERE id=?")
+        .bind(&reused_job)
+        .fetch_one(&app.db)
+        .await
+        .unwrap();
+    assert_ne!(owner, previous);
+    let upstream_order: Option<String> =
+        sqlx::query_scalar("SELECT upstream_url FROM acme_orders WHERE id=?")
+            .bind(&owner)
+            .fetch_one(&app.db)
+            .await
+            .unwrap();
+    assert!(upstream_order.is_some());
     sqlx::query("UPDATE acme_orders SET next_attempt=0")
         .execute(&app.db)
         .await
