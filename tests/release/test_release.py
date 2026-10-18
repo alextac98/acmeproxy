@@ -23,94 +23,107 @@ class PreflightTests(unittest.TestCase):
         self.directory = tempfile.TemporaryDirectory()
         self.addCleanup(self.directory.cleanup)
         self.root = Path(self.directory.name)
-        self.git('init', '-q')
-        self.commit_version('0.1.0')
-        self.event = self.root / 'event.json'
-        self.event.write_text(json.dumps({'before': self.git('rev-parse', 'HEAD')}))
+        self.write_version('0.1.0')
         self.outputs = self.root / 'outputs'
         self.enterContext(patch.object(release, 'ROOT', self.root))
         self.enterContext(patch.dict(release.os.environ, {
             'GITHUB_REF': 'refs/heads/main', 'GITHUB_REPOSITORY': 'alextac98/acmeproxy',
-            'GITHUB_EVENT_NAME': 'push', 'GITHUB_EVENT_PATH': str(self.event),
+            'GITHUB_EVENT_NAME': 'push', 'GITHUB_EVENT_PATH': str(self.root / 'missing-event.json'),
             'GITHUB_OUTPUT': str(self.outputs), 'GITHUB_RUN_ID': '123',
         }))
-        self.api = self.enterContext(patch.object(release, 'api', return_value=None))
+        self.tags = self.enterContext(patch.object(release, 'version_tags', return_value=[]))
         self.find_release = self.enterContext(patch.object(release, 'find_release', return_value=None))
         self.releases = self.enterContext(patch.object(release, 'releases', return_value=[]))
 
-    def git(self, *args):
-        return release.run('git', *args, cwd=self.root)
-
-    def commit_version(self, version):
+    def write_version(self, version):
         (self.root / 'Cargo.toml').write_text(f'[package]\nname = "acmeproxy"\nversion = "{version}"\n')
         (self.root / 'Cargo.lock').write_text(f'[[package]]\nname = "acmeproxy"\nversion = "{version}"\n')
-        self.commit('Version ' + version)
-
-    def commit(self, message):
-        self.git('add', 'Cargo.toml', 'Cargo.lock')
-        self.git('-c', 'user.name=Test', '-c', 'user.email=test@example.com', 'commit', '-qm', message)
 
     def test_stable_and_prerelease_bumps_start_releases(self):
+        self.tags.return_value = ['0.1.0']
         for version in ('0.1.1', '0.2.0-beta.1', '0.2.0'):
             with self.subTest(version=version):
-                self.commit_version(version)
+                self.write_version(version)
                 self.outputs.write_text('')
                 release.preflight()
                 self.assertIn('should_release=true\n', self.outputs.read_text())
                 self.assertIn(f'version={version}\n', self.outputs.read_text())
 
-    def test_dependency_change_skips_release_before_querying_github(self):
+    def test_dependency_change_with_existing_tag_skips_release(self):
+        self.tags.return_value = ['0.1.0']
         manifest = self.root / 'Cargo.toml'
         manifest.write_text(manifest.read_text() + '\n[dependencies]\nanyhow = "1"\n')
-        self.commit('Update dependencies')
         release.preflight()
         self.assertEqual(self.outputs.read_text(), 'should_release=false\n')
-        self.api.assert_not_called()
         self.find_release.assert_not_called()
         self.releases.assert_not_called()
 
-    def test_bump_before_last_commit_in_push_starts_release(self):
-        self.commit_version('0.1.1')
-        manifest = self.root / 'Cargo.toml'
-        manifest.write_text(manifest.read_text() + '\n[dependencies]\nanyhow = "1"\n')
-        self.commit('Update dependencies after bump')
+    def test_unchanged_manifest_can_release_a_version_newer_than_tags(self):
+        self.tags.return_value = ['0.0.9']
         release.preflight()
         self.assertIn('should_release=true\n', self.outputs.read_text())
-        self.assertIn('version=0.1.1\n', self.outputs.read_text())
+        self.assertIn('version=0.1.0\n', self.outputs.read_text())
 
-    def test_version_decrease_is_rejected(self):
-        self.commit_version('0.0.9')
-        with self.assertRaisesRegex(ValueError, 'must exceed the previous version'):
-            release.preflight()
-        self.api.assert_not_called()
-        self.assertFalse(self.outputs.exists())
+    def test_untagged_version_below_highest_tag_skips_without_published_releases(self):
+        self.write_version('0.3.0')
+        self.tags.return_value = ['0.2.0', '0.10.0', '0.1.0']
+        release.preflight()
+        self.assertEqual(self.outputs.read_text(), 'should_release=false\n')
+        self.find_release.assert_not_called()
+        self.releases.assert_not_called()
+
+    def test_semantic_prerelease_order_is_used_for_tags(self):
+        for latest, version, should_release in (
+            ('0.2.0-beta.2', '0.2.0-beta.10', 'true'),
+            ('0.2.0-rc.1', '0.2.0', 'true'),
+            ('0.2.0', '0.2.0-rc.2', 'false'),
+        ):
+            with self.subTest(latest=latest, version=version):
+                self.tags.return_value = [latest]
+                self.write_version(version)
+                self.outputs.write_text('')
+                release.preflight()
+                self.assertIn(f'should_release={should_release}\n', self.outputs.read_text())
 
     def test_bump_with_stale_lockfile_is_rejected(self):
         manifest = self.root / 'Cargo.toml'
         manifest.write_text(manifest.read_text().replace('0.1.0', '0.1.1'))
-        self.commit('Bump without updating lockfile')
         with self.assertRaisesRegex(ValueError, 'Cargo.lock is stale'):
             release.preflight()
-        self.api.assert_not_called()
+        self.tags.assert_not_called()
 
-    def test_manual_dispatch_does_not_require_a_version_change(self):
-        self.event.unlink()
-        with patch.dict(release.os.environ, {'GITHUB_EVENT_NAME': 'workflow_dispatch'}):
-            release.preflight()
-        self.assertIn('should_release=true\n', self.outputs.read_text())
-        self.assertIn('version=0.1.0\n', self.outputs.read_text())
+    def test_existing_tag_skips_successfully_for_push_and_manual_dispatch(self):
+        self.tags.return_value = ['0.1.0']
+        for event in ('push', 'workflow_dispatch'):
+            with self.subTest(event=event):
+                self.outputs.write_text('')
+                with patch.dict(release.os.environ, {'GITHUB_EVENT_NAME': event}):
+                    release.preflight()
+                self.assertEqual(self.outputs.read_text(), 'should_release=false\n')
+        self.find_release.assert_not_called()
+        self.releases.assert_not_called()
 
-    def test_first_push_to_main_can_release(self):
-        self.event.write_text(json.dumps({'before': '0' * 40}))
+    def test_repository_without_version_tags_can_release(self):
         release.preflight()
         self.assertIn('should_release=true\n', self.outputs.read_text())
 
-    def test_automatic_release_rejects_existing_version_tag(self):
-        self.commit_version('0.1.1')
-        self.api.return_value = {'object': {}}
-        with self.assertRaisesRegex(ValueError, 'Version tag already exists'):
+    def test_existing_draft_still_requires_retrying_its_original_run(self):
+        self.find_release.return_value = {'draft': True, 'tag_name': 'v0.1.0'}
+        with self.assertRaisesRegex(ValueError, 'rerun failed jobs in its original workflow'):
             release.preflight()
         self.assertFalse(self.outputs.exists())
+
+    def test_previous_image_still_comes_from_latest_published_release(self):
+        self.write_version('0.1.1')
+        self.tags.return_value = ['0.1.0']
+        self.releases.return_value = [{'tag_name': 'v0.1.0'}]
+
+        def download(*args):
+            (Path(args[-1]) / 'release.json').write_text(json.dumps(metadata()))
+
+        with patch.object(release, 'run', side_effect=download):
+            release.preflight()
+        self.assertIn(f"previous={metadata()['image']}@{metadata()['digest']}\n", self.outputs.read_text())
 
 
 class ReleaseTests(unittest.TestCase):
@@ -131,6 +144,13 @@ class ReleaseTests(unittest.TestCase):
         with patch.object(release, 'all_releases', return_value=[draft]):
             self.assertEqual(release.find_release('owner/repo', draft['tag_name']), draft)
             self.assertEqual(release.releases('owner/repo'), [])
+
+    def test_version_tags_include_all_pages_and_ignore_unrelated_names(self):
+        pages = [[{'name': name} for name in ('v0.2.0', 'docs', '0.3.0', 'v01.0.0')],
+                 [{'name': name} for name in ('v0.10.0', 'v0.2.0-rc.2')]]
+        with patch.object(release, 'run', return_value=json.dumps(pages)) as run:
+            self.assertEqual(release.version_tags('owner/repo'), ['0.2.0', '0.10.0', '0.2.0-rc.2'])
+        run.assert_called_once_with('gh', 'api', 'repos/owner/repo/tags?per_page=100', '--paginate', '--slurp')
 
     def test_version_order_and_rejections(self):
         versions = ['0.1.0-alpha.1', '0.1.0-beta.1', '0.1.0-beta.10', '0.1.0-rc.1', '0.1.0', '0.1.1', '0.2.0', '1.0.0']
@@ -191,14 +211,6 @@ class ReleaseTests(unittest.TestCase):
                 release.release(Namespace())
             run.assert_not_called()
 
-    def test_preflight_rejects_an_existing_version(self):
-        env = {'GITHUB_REF': 'refs/heads/main', 'GITHUB_REPOSITORY': 'alextac98/acmeproxy'}
-        with patch.dict(release.os.environ, env), patch.object(release, 'project_version', return_value='0.1.0'), \
-             patch.object(release, 'api', return_value={'object': {}}), patch.object(release, 'output') as output:
-            with self.assertRaisesRegex(ValueError, 'already exists'):
-                release.preflight()
-            output.assert_not_called()
-
     def simulate_release(self, stable=True, existing=None, conflict=None, missing_tag=False):
         from argparse import Namespace
         from subprocess import CompletedProcess
@@ -241,7 +253,7 @@ class ReleaseTests(unittest.TestCase):
             inspection = CompletedProcess([], 1, '', 'manifest unknown') if missing_tag else CompletedProcess([], 0, '', '')
             with patch.dict(release.os.environ, env), patch.object(release, 'api', side_effect=request), \
                  patch.object(release, 'run', side_effect=command), patch.object(release, 'project_version', return_value=meta['version']), \
-                 patch.object(release, 'releases', return_value=[{'tag_name': 'v9.0.0'}] if conflict == 'older' else []), \
+                 patch.object(release, 'version_tags', return_value=['9.0.0'] if conflict == 'older' else [meta['version']]), \
                  patch.object(release, 'digest', side_effect=image_digest), patch.object(release, 'anonymous_pull'), \
                  patch.object(release, 'find_release', return_value=current), \
                  patch.object(release.subprocess, 'run', return_value=inspection):

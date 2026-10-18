@@ -65,6 +65,12 @@ def all_releases(repo):
     return [r for page in pages for r in page]
 
 
+def version_tags(repo):
+    pages = json.loads(run('gh', 'api', f'repos/{repo}/tags?per_page=100', '--paginate', '--slurp'))
+    return [tag['name'][1:] for page in pages for tag in page
+            if tag['name'].startswith('v') and VERSION.fullmatch(tag['name'][1:])]
+
+
 def releases(repo):
     return [r for r in all_releases(repo) if not r['draft'] and VERSION.fullmatch(r['tag_name'].removeprefix('v'))]
 
@@ -111,26 +117,18 @@ def preflight():
     require(os.environ['GITHUB_REF'] == 'refs/heads/main', 'Release must run from main')
     repo = os.environ['GITHUB_REPOSITORY']
     version = project_version()
-    if os.environ.get('GITHUB_EVENT_NAME') == 'push':
-        event = json.loads(Path(os.environ['GITHUB_EVENT_PATH']).read_text())
-        before = event['before']
-        require(re.fullmatch(r'[0-9a-f]{40}', before), 'Invalid previous commit')
-        if before != '0' * 40:
-            # Compare the whole push, which may contain several commits.
-            manifest = run('git', 'show', f'{before}:Cargo.toml', cwd=ROOT)
-            previous_version = tomllib.loads(manifest)['package']['version']
-            if version == previous_version:
-                print('Package version is unchanged; skipping release')
-                output({'should_release': 'false'})
-                return
-            require(version_key(version) > version_key(previous_version), 'New version must exceed the previous version')
-    require(api(f'repos/{repo}/git/ref/tags/v{version}', optional=True) is None, 'Version tag already exists')
+    tags = version_tags(repo)
+    if tags:
+        latest_tag = max(tags, key=version_key)
+        if version_key(version) <= version_key(latest_tag):
+            print(f'Version {version} does not exceed latest tag v{latest_tag}; skipping release')
+            output({'should_release': 'false'})
+            return
     require(find_release(repo, 'v' + version) is None, 'Release already exists; rerun failed jobs in its original workflow or use a new version')
     published = releases(repo)
     previous = ''
     if published:
         latest = max(published, key=lambda r: version_key(r['tag_name'][1:]))
-        require(version_key(version) > version_key(latest['tag_name'][1:]), 'New version must exceed published versions')
         with tempfile.TemporaryDirectory() as tmp:
             run('gh', 'release', 'download', latest['tag_name'], '--repo', repo, '--pattern', 'release.json', '--dir', tmp)
             meta = json.loads((Path(tmp) / 'release.json').read_text())
@@ -205,7 +203,7 @@ def release(args):
             'image': args.image, 'digest': digest(source), 'run_id': os.environ['GITHUB_RUN_ID'],
             'attempt': os.environ['GITHUB_RUN_ATTEMPT'], 'previous_image': args.previous}
     validate(meta)
-    require(all(version_key(r['tag_name'][1:]) <= version_key(version) for r in releases(repo)),
+    require(all(version_key(tag) <= version_key(version) for tag in version_tags(repo)),
             'Refusing to move release channels backwards')
     existing = find_release(repo, meta['tag'])
     if existing:
