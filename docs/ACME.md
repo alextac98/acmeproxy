@@ -20,8 +20,8 @@ individual DNS hostnames only and never receives a client's certificate private 
 2. Open **Settings → ACME endpoint** and select **HTTP-01 verification**. The endpoint
    starts **Disabled**; disabling it does not disable the DNS gateway or managed certificates.
 3. Set the server URL as clients will see it, for example `https://acme.internal.example.com`.
-   Use an origin without a path/query. Terminate HTTPS at your reverse proxy. HTTP origins
-   are accepted for local testing, but many clients require HTTPS.
+   Use an origin without a path/query. Enable [native HTTPS](HTTPS.md) or terminate it at a
+   reverse proxy. HTTP origins are accepted for local testing, but many clients require HTTPS.
 4. Set allowed client network CIDRs. Defaults cover loopback/private LAN ranges. Checks
    use the TCP peer, so forwarded headers cannot bypass them. Behind a reverse proxy,
    also restrict ingress there because the app sees the proxy's IP. These restrictions

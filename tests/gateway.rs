@@ -97,6 +97,7 @@ dns_test_rm() {
             wake: Arc::new(tokio::sync::Notify::new()),
             config: Arc::new(tokio::sync::Mutex::new(config::ConfigFile { path, value })),
             healthy: Arc::new(AtomicBool::new(true)),
+            server_cert: Arc::default(),
         };
         Self {
             app,

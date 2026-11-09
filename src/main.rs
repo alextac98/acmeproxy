@@ -1,4 +1,5 @@
-use acmeproxy::{App, api, config, provider, security, store};
+use acmeproxy::{App, api, config, provider, security, server_tls, store};
+use axum::serve::ListenerExt;
 use fs2::FileExt;
 use std::{
     fs::{self, OpenOptions},
@@ -116,9 +117,13 @@ async fn main() -> anyhow::Result<()> {
     let db = store::connect(&data.join("acmeproxy.sqlite"), &vault).await?;
     let mut tx = db.begin().await?;
     config::sync(&mut tx, &file.value).await?;
+    if let Some(tls) = &file.value.server.tls {
+        server_tls::ensure_certificate(&mut tx, tls).await?;
+    }
     config::write(&file.path, &file.value)?;
     tx.commit().await?;
     let address = file.value.server.listen.clone();
+    let tls_address = file.value.server.tls.as_ref().map(|tls| tls.listen.clone());
     let timeout = Duration::from_secs(file.value.server.worker_timeout_seconds);
     let app = App {
         db,
@@ -134,22 +139,56 @@ async fn main() -> anyhow::Result<()> {
         wake: Arc::new(tokio::sync::Notify::new()),
         config: Arc::new(tokio::sync::Mutex::new(file)),
         healthy: Arc::new(std::sync::atomic::AtomicBool::new(true)),
+        server_cert: Arc::default(),
     };
+    // A stored certificate that cannot be loaded must not stop recovery through renewal.
+    if server_tls::reload(&app).await.is_err() {
+        tracing::error!("could not load the stored HTTPS certificate; waiting for renewal");
+    }
     let listener = tokio::net::TcpListener::bind(&address).await?;
+    let tls_listener = match &tls_address {
+        Some(address) => Some(server_tls::listen(
+            tokio::net::TcpListener::bind(address).await?,
+            app.server_cert.clone(),
+        )?),
+        None => None,
+    };
     let worker = tokio::spawn(store::run_worker(app.clone()));
     let certificates = tokio::spawn(acmeproxy::certificates::run_worker(app.clone()));
     let validation = tokio::spawn(acmeproxy::acme::run_validation_worker(app.clone()));
-    tracing::info!(%address, providers=app.drivers.len(), "ACME Proxy listening");
-    axum::serve(
-        listener,
-        api::router(app).into_make_service_with_connect_info::<std::net::SocketAddr>(),
-    )
-    .with_graceful_shutdown(async {
+    tracing::info!(%address, tls=?tls_address, providers=app.drivers.len(), "ACME Proxy listening");
+    let (stop, stopping) = tokio::sync::watch::channel(false);
+    tokio::spawn(async move {
         let mut term = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
             .expect("signal handler");
         tokio::select! { _ = tokio::signal::ctrl_c() => {}, _ = term.recv() => {} }
-    })
-    .await?;
+        let _ = stop.send(true);
+    });
+    let shutdown = |mut stopping: tokio::sync::watch::Receiver<bool>| async move {
+        let _ = stopping.wait_for(|stop| *stop).await;
+    };
+    let plain = axum::serve(
+        listener,
+        api::router(app.clone()).into_make_service_with_connect_info::<std::net::SocketAddr>(),
+    )
+    .with_graceful_shutdown(shutdown(stopping.clone()));
+    let secure = async {
+        let Some(listener) = tls_listener else {
+            return Ok(());
+        };
+        // Axum provides ConnectInfo<SocketAddr> for custom listeners only through TapIo.
+        let listener = listener.tap_io(|io| {
+            let _ = io.get_ref().0.set_nodelay(true);
+        });
+        axum::serve(
+            listener,
+            api::listener_router(app.clone(), api::ListenerKind::Tls)
+                .into_make_service_with_connect_info::<std::net::SocketAddr>(),
+        )
+        .with_graceful_shutdown(shutdown(stopping.clone()))
+        .await
+    };
+    tokio::try_join!(plain.into_future(), secure)?;
     validation.abort();
     let _ = validation.await;
     certificates.abort();

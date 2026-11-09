@@ -17,7 +17,7 @@ use instant_acme::{
 };
 use serde::Deserialize;
 use serde_json::{Value, json};
-use sqlx::Row;
+use sqlx::{Row, Sqlite, Transaction};
 use std::time::Duration;
 
 const MAX_CERTIFICATES: i64 = 100;
@@ -34,10 +34,12 @@ pub struct Create {
 }
 
 pub async fn list(State(app): State<App>) -> crate::api::Result<Json<Value>> {
+    let server = crate::server_tls::identity(&app).await;
     let rows = sqlx::query("SELECT id,domains,staging,auto_renew,state,phase,attempts,next_attempt,created_at,updated_at,expires_at,renew_at,last_error,fullchain IS NOT NULL AS downloadable FROM certificates ORDER BY created_at DESC")
         .fetch_all(&app.db).await?;
     Ok(Json(json!(rows.iter().map(|r| json!({
         "id": r.get::<String,_>("id"), "domains": serde_json::from_str::<Value>(r.get("domains")).unwrap_or(json!([])),
+        "server": server.as_ref().is_some_and(|(domains, staging)| r.get::<String,_>("domains") == *domains && r.get::<bool,_>("staging") == *staging),
         "staging": r.get::<bool,_>("staging"), "auto_renew": r.get::<bool,_>("auto_renew"),
         "state": r.get::<String,_>("state"), "phase": r.get::<String,_>("phase"),
         "attempts": r.get::<i64,_>("attempts"), "next_attempt": r.get::<i64,_>("next_attempt"),
@@ -97,17 +99,43 @@ pub async fn create(
             "certificate limit reached",
         ));
     }
-    let id = uuid::Uuid::new_v4().to_string();
     let mut tx = app.db.begin().await?;
-    sqlx::query("INSERT INTO clients(id,name,token_hash,scopes,revoked,created_at,managed) VALUES(?,?,?,?,0,?,1)")
-        .bind(&id).bind(format!("Certificate: {}", domains.join(", "))).bind(security::hash(&security::random_secret()))
-        .bind(&domains_json).bind(now()).execute(&mut *tx).await?;
-    sqlx::query("INSERT INTO certificates(id,domains,staging,next_attempt,created_at,updated_at) VALUES(?,?,?,?,?,?)")
-        .bind(&id).bind(domains_json).bind(input.staging).bind(now()).bind(now()).bind(now()).execute(&mut *tx).await?;
-    sqlx::query("INSERT INTO audit(at,actor,action,target,outcome) VALUES(?,'admin','certificate.requested',?,'queued')")
-        .bind(now()).bind(&id).execute(&mut *tx).await?;
+    let id = insert_request(&mut tx, "admin", &domains, input.staging).await?;
     tx.commit().await?;
     Ok((StatusCode::ACCEPTED, Json(json!({"id": id}))))
+}
+
+pub(crate) async fn insert_request(
+    tx: &mut Transaction<'_, Sqlite>,
+    actor: &str,
+    domains: &[String],
+    staging: bool,
+) -> anyhow::Result<String> {
+    let id = uuid::Uuid::new_v4().to_string();
+    let domains_json = serde_json::to_string(domains)?;
+    sqlx::query("INSERT INTO clients(id,name,token_hash,scopes,revoked,created_at,managed) VALUES(?,?,?,?,0,?,1)")
+        .bind(&id).bind(format!("Certificate: {}", domains.join(", "))).bind(security::hash(&security::random_secret()))
+        .bind(&domains_json).bind(now()).execute(&mut **tx).await?;
+    sqlx::query("INSERT INTO certificates(id,domains,staging,next_attempt,created_at,updated_at) VALUES(?,?,?,?,?,?)")
+        .bind(&id).bind(domains_json).bind(staging).bind(now()).bind(now()).bind(now()).execute(&mut **tx).await?;
+    sqlx::query("INSERT INTO audit(at,actor,action,target,outcome) VALUES(?,?,'certificate.requested',?,'queued')")
+        .bind(now()).bind(actor).bind(&id).execute(&mut **tx).await?;
+    Ok(id)
+}
+
+/// The certificate this server presents; losing it would take HTTPS down.
+async fn is_server_certificate(app: &App, id: &str) -> crate::api::Result<bool> {
+    let Some((domains, staging)) = crate::server_tls::identity(app).await else {
+        return Ok(false);
+    };
+    Ok(sqlx::query_scalar(
+        "SELECT EXISTS(SELECT 1 FROM certificates WHERE id=? AND domains=? AND staging=?)",
+    )
+    .bind(id)
+    .bind(domains)
+    .bind(staging)
+    .fetch_one(&app.db)
+    .await?)
 }
 
 #[derive(Deserialize)]
@@ -121,6 +149,11 @@ pub async fn settings(
     Json(input): Json<Settings>,
 ) -> crate::api::Result<Json<Value>> {
     let _guard = app.mutation.lock().await;
+    if !input.auto_renew && is_server_certificate(&app, &id).await? {
+        return Err(conflict(
+            "this server's HTTPS certificate must keep renewing",
+        ));
+    }
     let result = sqlx::query("UPDATE certificates SET auto_renew=?,state=CASE WHEN ?=0 AND state='queued' AND fullchain IS NOT NULL THEN 'failed' ELSE state END,updated_at=? WHERE id=?")
         .bind(input.auto_renew)
         .bind(input.auto_renew)
@@ -165,6 +198,11 @@ pub async fn remove(
     Path(id): Path<String>,
 ) -> crate::api::Result<Json<Value>> {
     let _guard = app.mutation.lock().await;
+    if is_server_certificate(&app, &id).await? {
+        return Err(conflict(
+            "this server's HTTPS certificate is in use; remove server.tls first",
+        ));
+    }
     let state: String = sqlx::query_scalar("SELECT state FROM certificates WHERE id=?")
         .bind(&id)
         .fetch_optional(&app.db)
@@ -212,6 +250,13 @@ pub async fn download(
         "fullchain.pem" | "privkey.pem" | "bundle.pem"
     ) {
         return Err(Error(StatusCode::NOT_FOUND, "file not found"));
+    }
+    // Nothing outside this process needs the key, so an admin token cannot export it.
+    if file != "fullchain.pem" && is_server_certificate(&app, &id).await? {
+        return Err(Error(
+            StatusCode::FORBIDDEN,
+            "this server's HTTPS private key cannot be downloaded",
+        ));
     }
     let row = sqlx::query("SELECT fullchain,private_key FROM certificates WHERE id=?")
         .bind(&id)
@@ -579,6 +624,10 @@ async fn save_issued(app: &App, id: &str, fullchain: &str) -> anyhow::Result<()>
     sqlx::query("INSERT INTO audit(at,actor,action,target,outcome) VALUES(?,'certificate-worker','certificate.issued',?,'success')")
         .bind(now()).bind(id).execute(&mut *tx).await?;
     tx.commit().await?;
+    // The certificate is safely stored, so a load failure must not mark issuance as failed.
+    if crate::server_tls::reload(app).await.is_err() {
+        tracing::error!("could not load the renewed HTTPS certificate; serving the previous one");
+    }
     Ok(())
 }
 
@@ -605,8 +654,13 @@ where
             app.healthy.load(std::sync::atomic::Ordering::SeqCst),
             "configuration needs restart"
         );
-        let row = sqlx::query("SELECT id,staging FROM certificates WHERE (state IN ('queued','issuing') AND next_attempt<=?) OR (auto_renew=1 AND state IN ('issued','failed') AND fullchain IS NOT NULL AND next_attempt<=?) ORDER BY next_attempt,created_at LIMIT 1")
-            .bind(now()).bind(now()).fetch_optional(&app.db).await?;
+        let server = crate::server_tls::identity(app).await;
+        // The server certificate has no operator waiting to click Retry on a first issuance.
+        let row = sqlx::query("SELECT id,staging FROM certificates WHERE (state IN ('queued','issuing') AND next_attempt<=?) OR (auto_renew=1 AND state IN ('issued','failed') AND fullchain IS NOT NULL AND next_attempt<=?) OR (state='failed' AND domains=? AND staging=? AND next_attempt<=?) ORDER BY next_attempt,created_at LIMIT 1")
+            .bind(now()).bind(now())
+            .bind(server.as_ref().map(|(domains, _)| domains.as_str()))
+            .bind(server.as_ref().map(|(_, staging)| *staging))
+            .bind(now()).fetch_optional(&app.db).await?;
         let Some(row) = row else {
             return Ok(false);
         };

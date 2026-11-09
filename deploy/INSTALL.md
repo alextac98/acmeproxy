@@ -32,7 +32,7 @@ docker compose down                    # Stop, keeping your data
 
 Do not use `down -v`: it deletes your data. Use one instance per volume, on local storage. See [UPGRADE.md](UPGRADE.md) before updating.
 
-The default port is accessible only from the Docker host. For remote access, put the app behind an HTTPS reverse proxy. A containerized proxy should share a Docker network and connect to `acmeproxy:8080`.
+The default port is accessible only from the Docker host. For remote access, enable native HTTPS (see `docs/HTTPS.md` in the project repository) or put the app behind an HTTPS reverse proxy. A containerized proxy should share a Docker network and connect to `acmeproxy:8080`.
 
 ## Docker without Compose
 

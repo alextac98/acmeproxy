@@ -63,9 +63,10 @@ Open <http://127.0.0.1:8080> and sign in using the contents of `data/admin.token
 The token is never printed automatically. The default adapter path assumes `data/`
 is beside `.local/`; adjust `dnsapi_home` for another layout.
 
-The server defaults to loopback HTTP. For access from other machines, terminate HTTPS
-at a reverse proxy and restrict administration to trusted operators. The proxy itself
-does not obtain its own TLS certificate in this version.
+The server defaults to loopback HTTP. For access from other machines, enable
+[native HTTPS](docs/HTTPS.md), which obtains and renews the server's own certificate
+through your DNS provider, or terminate HTTPS at a reverse proxy. Either way, restrict
+administration to trusted operators.
 
 ## One configuration directory
 
@@ -166,8 +167,8 @@ before reducing it. This is the application audit log, not raw server stdout.
 ## Internal ACME endpoint (Certbot and other ACME clients)
 
 Open **ACME endpoint → Settings** to enable **HTTP-01 verification**.
-Point clients at `http://YOUR-SERVER:8080/acme/directory` (use an HTTPS reverse proxy for
-clients that require TLS). Configure DNS credentials once on this server; clients keep
+Point clients at `http://YOUR-SERVER:8080/acme/directory` (enable
+[native HTTPS](docs/HTTPS.md) for clients that require TLS). Configure DNS credentials once on this server; clients keep
 their own keys and use standard ACME issuance and renewal, with no DNS plugin, gateway
 token, account approval, or manual TXT records. The client's hostname must resolve to an
 HTTP-01 responder reachable from Acme Proxy on port 80. For internal services, configure

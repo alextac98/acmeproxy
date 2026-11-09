@@ -964,6 +964,7 @@ function renderCertificateTable(target, certificates, summary = false) {
     const row = node("tr");
     const cells = columns.map(label => { const cell = node("td"); cell.dataset.label = label; row.append(cell); return cell; });
     cells[0].append(routeLink(cert.domains[0], resourcePath("certificates", cert.id)));
+    if (cert.server) cells[0].append(node("small", "", "This server's HTTPS certificate"));
     if (cert.domains.length > 1) cells[0].append(node("small", "", cert.domains.slice(1).join(", ")));
     cells[0].append(node("small", cert.staging ? "staging-label" : "", cert.staging ? "Staging · not browser trusted" : "Production · Let's Encrypt"));
     const [status, tone] = certificateStatus(cert);
@@ -1062,11 +1063,11 @@ function renderCurrentDetail() {
       if (record.downloadable && record.expires_at > Date.now() / 1000) statusPanel.append(node("p", "hint", "Renewal failed; the current certificate is still valid and can be downloaded."));
     }
     const actions = node("div", "detail-actions");
-    if (record.downloadable) actions.append(action("Download files", () => openDownloads(record.id), "primary"));
+    if (record.downloadable && !record.server) actions.append(action("Download files", () => openDownloads(record.id), "primary"));
     if (record.state === "failed") actions.append(action("Retry renewal / issuance", async () => {
       try { await api(`/certificates/${record.id}/retry`, "POST"); await refreshCertificates(); } catch (error) { notify(error.message, true); }
     }, "secondary"));
-    actions.append(action(record.auto_renew ? "Pause renewal" : "Enable renewal", async () => {
+    if (!record.server) actions.append(action(record.auto_renew ? "Pause renewal" : "Enable renewal", async () => {
       try { await api(`/certificates/${record.id}`, "PUT", { auto_renew: !record.auto_renew }); await refreshCertificates(); } catch (error) { notify(error.message, true); }
     }, "secondary"));
     statusPanel.append(actions);
@@ -1081,8 +1082,8 @@ function renderCurrentDetail() {
     const activityLinks = node("div", "detail-actions");
     record.domains.forEach(domain => activityLinks.append(routeLink("DNS validations for " + domain, "/activity/validations?domain=" + encodeURIComponent(domain.replace(/^\*\./, "")))));
     target.append(detailSection("Related activity", node("p", "hint", "These views show retained DNS validations for the domain, which may include other clients or certificate attempts."), activityLinks));
-    target.append(node("p", "hint", "Renewal updates the files stored here. Download or retrieve them through the admin API and install them on your services."));
-    if (record.state !== "issuing") {
+    target.append(node("p", "hint", record.server ? "ACME Proxy serves this certificate on its own HTTPS listener and installs each renewal automatically, without a restart." : "Renewal updates the files stored here. Download or retrieve them through the admin API and install them on your services."));
+    if (record.state !== "issuing" && !record.server) {
       const advanced = node("details", "panel advanced-settings");
       advanced.dataset.section = "advanced";
       advanced.open = opened.has("advanced");

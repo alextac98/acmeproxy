@@ -34,6 +34,9 @@ pub struct Server {
     pub audit_retention: i64,
     /// DNS-01 propagation only; an empty list retains system resolvers.
     pub dns01_resolvers: Vec<IpAddr>,
+    /// Native HTTPS; file-managed because it decides which sockets are bound at startup.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tls: Option<Tls>,
 }
 impl Default for Server {
     fn default() -> Self {
@@ -44,7 +47,44 @@ impl Default for Server {
             worker_timeout_seconds: 30,
             audit_retention: 1000,
             dns01_resolvers: Vec::new(),
+            tls: None,
         }
+    }
+}
+/// What the plain HTTP listener still serves once native HTTPS is configured.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PlainHttp {
+    #[default]
+    Full,
+    /// Bearer tokens must use HTTPS; only signed ACME requests and health checks remain.
+    AcmeOnly,
+}
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Tls {
+    pub listen: String,
+    pub domain: String,
+    #[serde(default)]
+    pub staging: bool,
+    #[serde(default)]
+    pub terms_agreed: bool,
+    #[serde(default)]
+    pub plain_http: PlainHttp,
+    /// Origin advertised to ACME clients still using HTTP. Empty closes ACME on that listener.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub plain_http_origin: String,
+}
+impl Tls {
+    /// The public URL must name this certificate, or clients could never verify it.
+    /// `acme_only` redirects there, and only the operator knows the published HTTPS port.
+    pub fn accepts_base_url(&self, base_url: &str) -> bool {
+        if base_url.is_empty() {
+            return self.plain_http != PlainHttp::AcmeOnly;
+        }
+        url::Url::parse(base_url).is_ok_and(|url| {
+            url.scheme() == "https" && url.host_str() == Some(self.domain.as_str())
+        })
     }
 }
 #[derive(Clone, Serialize, Deserialize)]
@@ -189,6 +229,40 @@ pub fn normalize(config: &mut Config, vault: &Vault, drivers: &[Driver]) -> anyh
             URL_SAFE_NO_PAD.decode(&client.token_hash)?.len() == 32
                 && hashes.insert(client.token_hash.clone()),
             "client token hashes must be unique SHA-256 hashes"
+        );
+    }
+    normalize_tls(config)
+}
+
+fn normalize_tls(config: &mut Config) -> anyhow::Result<()> {
+    let Some(tls) = &mut config.server.tls else {
+        return Ok(());
+    };
+    anyhow::ensure!(
+        tls.listen != config.server.listen,
+        "server.tls.listen must differ from server.listen"
+    );
+    tls.domain = security::domain(&tls.domain).map_err(anyhow::Error::msg)?;
+    anyhow::ensure!(
+        tls.terms_agreed,
+        "accept the Let's Encrypt subscriber agreement with server.tls.terms_agreed"
+    );
+    anyhow::ensure!(
+        config
+            .providers
+            .iter()
+            .any(|provider| security::within(&tls.domain, &provider.zone)),
+        "no DNS provider covers server.tls.domain"
+    );
+    anyhow::ensure!(
+        tls.accepts_base_url(&config.acme.base_url),
+        "acme.base_url must be the https:// origin of server.tls.domain"
+    );
+    if !tls.plain_http_origin.is_empty() {
+        tls.plain_http_origin = crate::acme::origin(&tls.plain_http_origin)?;
+        anyhow::ensure!(
+            tls.plain_http_origin.starts_with("http://"),
+            "server.tls.plain_http_origin must use http://"
         );
     }
     Ok(())
