@@ -61,23 +61,20 @@ pub(crate) async fn identity(app: &App) -> Option<(String, bool)> {
 
 /// Request the server certificate, or adopt a matching one requested through the UI.
 pub async fn ensure_certificate(tx: &mut Transaction<'_, Sqlite>, tls: &Tls) -> anyhow::Result<()> {
-    let existing: Option<String> =
-        sqlx::query_scalar("SELECT id FROM certificates WHERE domains=? AND staging=?")
-            .bind(certificate_domains(tls))
-            .bind(tls.staging)
-            .fetch_optional(&mut **tx)
-            .await?;
-    let Some(id) = existing else {
+    // Writing first takes SQLite's write lock up front; a read-then-write transaction
+    // fails immediately if another connection commits in between.
+    // A restart is the operator's signal to retry now instead of on the daily schedule.
+    let adopted = sqlx::query("UPDATE certificates SET auto_renew=1,attempts=CASE WHEN state='failed' THEN 0 ELSE attempts END,next_attempt=CASE WHEN state='failed' THEN ? ELSE next_attempt END,state=CASE WHEN state='failed' THEN 'queued' ELSE state END WHERE domains=? AND staging=?")
+        .bind(now())
+        .bind(certificate_domains(tls))
+        .bind(tls.staging)
+        .execute(&mut **tx)
+        .await?
+        .rows_affected();
+    if adopted == 0 {
         certificates::insert_request(tx, "system", std::slice::from_ref(&tls.domain), tls.staging)
             .await?;
-        return Ok(());
-    };
-    // A restart is the operator's signal to retry now instead of on the daily schedule.
-    sqlx::query("UPDATE certificates SET auto_renew=1,attempts=CASE WHEN state='failed' THEN 0 ELSE attempts END,next_attempt=CASE WHEN state='failed' THEN ? ELSE next_attempt END,state=CASE WHEN state='failed' THEN 'queued' ELSE state END WHERE id=?")
-        .bind(now())
-        .bind(id)
-        .execute(&mut **tx)
-        .await?;
+    }
     Ok(())
 }
 

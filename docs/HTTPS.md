@@ -48,7 +48,8 @@ base_url = "https://certs.example.com"
 
 - `domain` is one exact hostname and must be covered by a configured DNS provider.
 - `acme.base_url`, when set, must be the `https://` origin of `domain`. Include a port if
-  you publish one other than 443.
+  you publish one other than 443. It is required with `plain_http = "acme_only"`, even when
+  the ACME endpoint is disabled, because that is where plain HTTP redirects to.
 - `staging` is separate from `acme.staging`. Clients will not trust a staging certificate.
   After switching from staging to production, the old staging certificate becomes an
   ordinary managed certificate; remove it in the UI.
@@ -68,8 +69,8 @@ requests are refused and clients must use HTTPS.
 Each listener advertises URLs on its own origin. A client that connected over HTTP gets
 HTTP URLs built from `plain_http_origin`, and a client that connected over HTTPS gets URLs
 built from `acme.base_url`. Signed requests must name the origin of the listener that
-received them. Account URLs are accepted from either origin, so existing accounts remain
-valid.
+received them. Account URLs are matched by account ID, so existing accounts remain valid
+on either listener, including after the plain listener is closed.
 
 Keeping `/acme/*` on HTTP during a migration is low risk: requests are signed, carry no
 bearer tokens, and HTTP-01 is still enforced. Someone on the network path could disrupt

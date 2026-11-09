@@ -40,9 +40,6 @@ pub struct Settings {
     pub approved_accounts: Vec<String>,
     pub staging: bool,
     pub terms_agreed: bool,
-    /// The other listener's origin for this request; never configuration.
-    #[serde(skip)]
-    other_origin: String,
 }
 impl Default for Settings {
     fn default() -> Self {
@@ -65,7 +62,6 @@ impl Default for Settings {
             approved_accounts: vec![],
             staging: true,
             terms_agreed: false,
-            other_origin: String::new(),
         }
     }
 }
@@ -112,27 +108,13 @@ impl Settings {
         let Some(tls) = tls else {
             return Some(self);
         };
-        if listener == ListenerKind::Tls {
-            self.other_origin = tls.plain_http_origin.clone();
-        } else {
+        if listener == ListenerKind::Plain {
             if tls.plain_http_origin.is_empty() {
                 return None;
             }
-            self.other_origin =
-                std::mem::replace(&mut self.base_url, tls.plain_http_origin.clone());
+            self.base_url = tls.plain_http_origin.clone();
         }
         Some(self)
-    }
-    /// Account URLs are stable identifiers, so one remembered on either origin stays valid.
-    /// The signed request URL is still bound to this listener's origin.
-    fn account_id<'a>(&self, url: &'a str) -> Option<&'a str> {
-        [&self.base_url, &self.other_origin]
-            .into_iter()
-            .filter(|origin| !origin.is_empty())
-            .find_map(|origin| {
-                url.strip_prefix(origin.as_str())?
-                    .strip_prefix("/acme/account/")
-            })
     }
     fn accepts_ip(&self, ip: std::net::IpAddr) -> bool {
         self.allowed_networks.iter().any(|n| {
@@ -140,6 +122,16 @@ impl Settings {
                 .is_ok_and(|n| n.contains(&ip.to_canonical()))
         })
     }
+}
+
+/// The account named by an account URL. The origin is deliberately ignored: a client may
+/// remember a URL from an origin that has since closed, and its signature proves ownership.
+/// The signed request URL stays bound to the receiving listener's origin.
+fn account_id(url: &str) -> Option<&str> {
+    let rest = url
+        .strip_prefix("https://")
+        .or_else(|| url.strip_prefix("http://"))?;
+    rest[rest.find('/')?..].strip_prefix("/acme/account/")
 }
 
 /// Canonicalize an HTTP(S) origin: scheme and host only, plus any non-default port.

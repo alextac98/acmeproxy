@@ -195,16 +195,11 @@ async fn plain_http_policy(State(app): State<App>, request: Request, next: Next)
         return next.run(request).await;
     }
     if matches!(*request.method(), Method::GET | Method::HEAD) && !path.starts_with("/api/") {
-        let origin = if base_url.is_empty() {
-            format!("https://{}", tls.domain)
-        } else {
-            base_url
-        };
         let target = request
             .uri()
             .path_and_query()
             .map_or(path, |value| value.as_str());
-        return Redirect::permanent(&format!("{origin}{target}")).into_response();
+        return Redirect::permanent(&format!("{base_url}{target}")).into_response();
     }
     Error(StatusCode::FORBIDDEN, "use HTTPS for this endpoint").into_response()
 }

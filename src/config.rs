@@ -76,12 +76,15 @@ pub struct Tls {
     pub plain_http_origin: String,
 }
 impl Tls {
-    /// The public ACME URL must name this certificate, or clients could never verify it.
+    /// The public URL must name this certificate, or clients could never verify it.
+    /// `acme_only` redirects there, and only the operator knows the published HTTPS port.
     pub fn accepts_base_url(&self, base_url: &str) -> bool {
-        base_url.is_empty()
-            || url::Url::parse(base_url).is_ok_and(|url| {
-                url.scheme() == "https" && url.host_str() == Some(self.domain.as_str())
-            })
+        if base_url.is_empty() {
+            return self.plain_http != PlainHttp::AcmeOnly;
+        }
+        url::Url::parse(base_url).is_ok_and(|url| {
+            url.scheme() == "https" && url.host_str() == Some(self.domain.as_str())
+        })
     }
 }
 #[derive(Clone, Serialize, Deserialize)]

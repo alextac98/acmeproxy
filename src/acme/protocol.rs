@@ -1,4 +1,4 @@
-use super::{Mode, Settings, check_domains};
+use super::{Mode, Settings, account_id, check_domains};
 use crate::{App, api::ListenerKind, now, security, store};
 use axum::{
     body::to_bytes,
@@ -206,8 +206,7 @@ async fn authenticate(app: &App, settings: &Settings, path: &str, body: &[u8]) -
             (None, canonical_jwk(jwk)?)
         }
         (None, Some(kid)) if !path.ends_with("/new-account") => {
-            let id = settings
-                .account_id(kid)
+            let id = account_id(kid)
                 .filter(|id| uuid::Uuid::parse_str(id).is_ok())
                 .ok_or_else(|| malformed("invalid account URL"))?;
             let row = sqlx::query("SELECT jwk,status FROM downstream_accounts WHERE id=?")
@@ -899,10 +898,7 @@ async fn key_change(
     )?;
     verify(&inner, &protected, &jwk)?;
     let input = payload(&decode(&inner.payload)?)?;
-    if input["account"]
-        .as_str()
-        .and_then(|url| settings.account_id(url))
-        != Some(account)
+    if input["account"].as_str().and_then(account_id) != Some(account)
         || canonical_jwk(&input["oldKey"])? != signed.jwk
         || jwk == signed.jwk
     {

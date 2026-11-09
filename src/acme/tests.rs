@@ -1729,3 +1729,51 @@ async fn the_ui_cannot_point_the_acme_url_away_from_the_server_certificate() {
     assert_eq!(result.err().unwrap().0, StatusCode::BAD_REQUEST);
     assert_eq!(app.config.lock().await.value.acme.base_url, HTTPS);
 }
+
+#[tokio::test]
+async fn an_http_account_url_keeps_working_after_the_plain_endpoint_closes() {
+    let fixture = Fixture::new().await;
+    let app = &fixture.app;
+    enable(app, PlainHttp::Full, HTTP).await;
+    let key = Signer::new();
+    let kid = register_on(app, &key, ListenerKind::Plain, HTTP).await;
+    let path = kid.strip_prefix(HTTP).unwrap().to_owned();
+    enable(app, PlainHttp::Full, "").await;
+    let body = key.jws_at(
+        HTTPS,
+        &path,
+        Some(&nonce_on(app, ListenerKind::Tls).await),
+        Some(&kid),
+        json!({}),
+    );
+    let (status, headers, value) = call_on(
+        app,
+        ListenerKind::Tls,
+        "POST",
+        &path,
+        body,
+        "127.0.0.1:1234",
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{value}");
+    assert_eq!(headers["location"], format!("{HTTPS}{path}"));
+}
+
+#[test]
+fn account_urls_are_matched_by_path_not_origin() {
+    for url in [
+        "https://certs.example.com/acme/account/id",
+        "http://10.0.0.1:8080/acme/account/id",
+    ] {
+        assert_eq!(account_id(url), Some("id"), "{url}");
+    }
+    for url in [
+        "ftp://certs.example.com/acme/account/id",
+        "https://certs.example.com/acme/order/id",
+        "https://certs.example.com/prefix/acme/account/id",
+        "https://certs.example.com",
+        "/acme/account/id",
+    ] {
+        assert_eq!(account_id(url), None, "{url}");
+    }
+}

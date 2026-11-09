@@ -40,11 +40,12 @@ pub(crate) async fn enable(app: &App, plain_http: PlainHttp, origin: &str) -> St
         let _guard = app.mutation.lock().await;
         let mut next = app.config.lock().await.value.clone();
         next.server.tls = Some(tls.clone());
-        let mut acme = Settings::default();
-        acme.mode = Mode::Http01;
-        acme.base_url = HTTPS.into();
-        acme.terms_agreed = true;
-        next.acme = acme;
+        next.acme = Settings {
+            mode: Mode::Http01,
+            base_url: HTTPS.into(),
+            terms_agreed: true,
+            ..Default::default()
+        };
         config::apply(app, next, "test.tls", "tls").await.unwrap();
     }
     let mut tx = app.db.begin().await.unwrap();
@@ -376,6 +377,10 @@ async fn invalid_tls_configuration_is_rejected() {
     };
     let valid = check(&|_| {}).expect("valid configuration");
     assert_eq!(valid.server.tls.unwrap().plain_http_origin, HTTP);
+    assert!(
+        check(&|c| c.acme.base_url.clear()).is_ok(),
+        "full mode never redirects, so it needs no public URL"
+    );
 
     fn tls(config: &mut Config) -> &mut Tls {
         config.server.tls.as_mut().unwrap()
@@ -410,6 +415,13 @@ async fn invalid_tls_configuration_is_rejected() {
         (
             "other base url host",
             Box::new(|c| c.acme.base_url = "https://other.example.com".into()),
+        ),
+        (
+            "acme_only without a redirect target",
+            Box::new(|c| {
+                tls(c).plain_http = PlainHttp::AcmeOnly;
+                c.acme.base_url.clear();
+            }),
         ),
     ];
     for (name, change) in cases {
