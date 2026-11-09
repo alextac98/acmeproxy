@@ -31,6 +31,6 @@ LABEL org.opencontainers.image.title="ACME Proxy" \
       org.opencontainers.image.revision=$VCS_REF
 USER 10001:10001
 WORKDIR /config
-EXPOSE 8080
+EXPOSE 8080 8443
 ENTRYPOINT ["/bin/sh", "/usr/local/bin/acmeproxy-entrypoint"]
 CMD []

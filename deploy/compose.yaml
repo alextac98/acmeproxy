@@ -6,6 +6,8 @@ services:
     restart: unless-stopped
     ports:
       - "127.0.0.1:8080:8080"
+      # Native HTTPS: add [server.tls] to config.toml, then publish its port.
+      # - "443:8443"
     volumes:
       - config:/config
     tmpfs:

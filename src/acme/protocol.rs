@@ -1,5 +1,5 @@
 use super::{Mode, Settings, check_domains};
-use crate::{App, now, security, store};
+use crate::{App, api::ListenerKind, now, security, store};
 use axum::{
     body::to_bytes,
     extract::{ConnectInfo, OriginalUri, Request, State},
@@ -206,9 +206,8 @@ async fn authenticate(app: &App, settings: &Settings, path: &str, body: &[u8]) -
             (None, canonical_jwk(jwk)?)
         }
         (None, Some(kid)) if !path.ends_with("/new-account") => {
-            let prefix = settings.url("account/");
-            let id = kid
-                .strip_prefix(&prefix)
+            let id = settings
+                .account_id(kid)
                 .filter(|id| uuid::Uuid::parse_str(id).is_ok())
                 .ok_or_else(|| malformed("invalid account URL"))?;
             let row = sqlx::query("SELECT jwk,status FROM downstream_accounts WHERE id=?")
@@ -277,7 +276,10 @@ pub(super) async fn handle(
     OriginalUri(uri): OriginalUri,
     request: Request,
 ) -> Response {
-    let settings = app.config.lock().await.value.acme.clone();
+    let (settings, tls) = {
+        let config = app.config.lock().await;
+        (config.value.acme.clone(), config.value.server.tls.clone())
+    };
     if settings.mode == Mode::Disabled {
         return missing().response();
     }
@@ -288,8 +290,20 @@ pub(super) async fn handle(
     if !peer.is_some_and(|ip| settings.accepts_ip(ip)) {
         return denied("client address is outside the configured ACME networks").response();
     }
+    let listener = request
+        .extensions()
+        .get::<ListenerKind>()
+        .copied()
+        .unwrap_or(ListenerKind::Plain);
+    let Some(settings) = settings.for_listener(listener, tls.as_ref()) else {
+        return denied("ACME over plain HTTP is closed; use the HTTPS directory").response();
+    };
     let method = request.method().clone();
     let path = uri.path();
+    // Clients start at the directory, so this names each one still to be migrated.
+    if tls.is_some() && listener == ListenerKind::Plain && path == "/acme/directory" {
+        tracing::info!(peer = ?peer, "ACME client is using plain HTTP");
+    }
     let result = async {
         if uri.query().is_some() { return Err(malformed("ACME request URLs must not contain a query")); }
         if path == "/acme/directory" && method == Method::GET {
@@ -885,7 +899,10 @@ async fn key_change(
     )?;
     verify(&inner, &protected, &jwk)?;
     let input = payload(&decode(&inner.payload)?)?;
-    if input["account"] != settings.url(&format!("account/{account}"))
+    if input["account"]
+        .as_str()
+        .and_then(|url| settings.account_id(url))
+        != Some(account)
         || canonical_jwk(&input["oldKey"])? != signed.jwk
         || jwk == signed.jwk
     {

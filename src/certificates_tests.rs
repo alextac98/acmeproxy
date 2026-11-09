@@ -103,6 +103,7 @@ dns_test_rm() {
             wake: Arc::new(tokio::sync::Notify::new()),
             config: Arc::new(tokio::sync::Mutex::new(config::ConfigFile { path, value })),
             healthy: Arc::new(AtomicBool::new(true)),
+            server_cert: Arc::default(),
         };
         let worker = tokio::spawn(store::run_worker(app.clone()));
         Self {
@@ -927,4 +928,160 @@ async fn internal_challenge_reuse_preserves_inflight_and_gateway_ownership() {
                 .contains("another client")
         );
     }
+}
+
+#[tokio::test]
+async fn server_certificate_goes_live_and_renews_without_a_restart() {
+    use crate::server_tls::tests::{DOMAIN, HTTP, enable, fetch, issue_for, serve};
+    use tokio_rustls::rustls::pki_types::{CertificateDer, pem::PemObject};
+    let mut fixture = Fixture::new().await;
+    let resolver = fixture.resolver().await;
+    let app = &fixture.app;
+    let id = enable(app, config::PlainHttp::Full, HTTP).await;
+    let (address, _server) = serve(app).await;
+    assert!(
+        fetch(address, issue_for(DOMAIN, false).root, "/healthz")
+            .await
+            .is_err()
+    );
+    let ca = Ca {
+        state: Arc::new(Mutex::new(CaState::default())),
+        records: fixture.directory.path().join("records"),
+    };
+    let account = ca.account().await;
+    let issue_next = || {
+        let account = account.clone();
+        let resolver = &resolver;
+        process_one_with(app, move |id, _| async move {
+            issue(app, &id, account, resolver).await
+        })
+    };
+    let root = || async {
+        let chain: String = sqlx::query_scalar("SELECT fullchain FROM certificates WHERE id=?")
+            .bind(&id)
+            .fetch_one(&app.db)
+            .await
+            .unwrap();
+        CertificateDer::pem_slice_iter(chain.as_bytes())
+            .last()
+            .unwrap()
+            .unwrap()
+    };
+
+    assert!(issue_next().await.unwrap());
+    let first = root().await;
+    let response = fetch(address, first.clone(), "/healthz").await.unwrap();
+    assert!(response.starts_with("HTTP/1.1 200"), "{response}");
+
+    sqlx::query("UPDATE certificates SET next_attempt=0 WHERE id=?")
+        .bind(&id)
+        .execute(&app.db)
+        .await
+        .unwrap();
+    assert!(issue_next().await.unwrap());
+    let second = root().await;
+    assert_ne!(first, second);
+    assert!(fetch(address, second, "/healthz").await.is_ok());
+    assert!(fetch(address, first, "/healthz").await.is_err());
+}
+
+#[tokio::test]
+async fn only_the_server_certificate_retries_a_failed_first_issuance_unattended() {
+    use crate::server_tls::tests::{HTTP, enable};
+    let fixture = Fixture::new().await;
+    let app = &fixture.app;
+    let server = enable(app, config::PlainHttp::Full, HTTP).await;
+    let other = fixture.create(&["other.example.com"]).await;
+    sqlx::query("UPDATE certificates SET state='failed',attempts=5,next_attempt=0")
+        .execute(&app.db)
+        .await
+        .unwrap();
+    let picked = Arc::new(Mutex::new(Vec::new()));
+    while {
+        let picked = picked.clone();
+        process_one_with(app, |id, _| async move {
+            picked.lock().unwrap().push(id);
+            anyhow::bail!("simulated CA outage")
+        })
+        .await
+        .unwrap()
+    } {
+        assert!(picked.lock().unwrap().len() < 3);
+    }
+    assert_eq!(*picked.lock().unwrap(), vec![server.clone()]);
+    let next_attempt: i64 = sqlx::query_scalar("SELECT next_attempt FROM certificates WHERE id=?")
+        .bind(&server)
+        .fetch_one(&app.db)
+        .await
+        .unwrap();
+    assert!(next_attempt >= now() + 86000, "retries back off to daily");
+    let state: String = sqlx::query_scalar("SELECT state FROM certificates WHERE id=?")
+        .bind(&other)
+        .fetch_one(&app.db)
+        .await
+        .unwrap();
+    assert_eq!(state, "failed");
+}
+
+#[tokio::test]
+async fn the_server_certificate_cannot_be_removed_paused_or_exported() {
+    use crate::server_tls::tests::{HTTP, enable};
+    let fixture = Fixture::new().await;
+    let app = &fixture.app;
+    let id = enable(app, config::PlainHttp::Full, HTTP).await;
+    let path = format!("/api/admin/certificates/{id}");
+    let (_, _, listing) = fixture
+        .request("GET", "/api/admin/certificates", true, Value::Null)
+        .await;
+    let listing: Value = serde_json::from_slice(&listing).unwrap();
+    assert_eq!(listing[0]["server"], true);
+    assert_eq!(
+        fixture.request("DELETE", &path, true, Value::Null).await.0,
+        StatusCode::CONFLICT
+    );
+    assert_eq!(
+        fixture
+            .request("PUT", &path, true, json!({"auto_renew":false}))
+            .await
+            .0,
+        StatusCode::CONFLICT
+    );
+    for file in ["privkey.pem", "bundle.pem"] {
+        assert_eq!(
+            fixture
+                .request("GET", &format!("{path}/{file}"), true, Value::Null)
+                .await
+                .0,
+            StatusCode::FORBIDDEN
+        );
+    }
+    assert_eq!(
+        fixture
+            .request("GET", &format!("{path}/fullchain.pem"), true, Value::Null)
+            .await
+            .0,
+        StatusCode::CONFLICT,
+        "the public chain is only unavailable because nothing is issued yet"
+    );
+}
+
+#[tokio::test]
+async fn the_last_provider_covering_the_server_certificate_cannot_be_removed() {
+    use crate::server_tls::tests::{HTTP, enable};
+    let fixture = Fixture::new().await;
+    let app = &fixture.app;
+    enable(app, config::PlainHttp::Full, HTTP).await;
+    let provider = app.config.lock().await.value.providers[0].id.clone();
+    assert_eq!(
+        fixture
+            .request(
+                "DELETE",
+                &format!("/api/admin/providers/{provider}"),
+                true,
+                Value::Null
+            )
+            .await
+            .0,
+        StatusCode::CONFLICT
+    );
 }

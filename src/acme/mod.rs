@@ -6,7 +6,7 @@ mod worker;
 pub use validation::run_worker as run_validation_worker;
 pub(crate) use worker::process_one;
 
-use crate::{App, api, config, security};
+use crate::{App, api, api::ListenerKind, config, security};
 use axum::{
     Json, Router,
     extract::State,
@@ -40,6 +40,9 @@ pub struct Settings {
     pub approved_accounts: Vec<String>,
     pub staging: bool,
     pub terms_agreed: bool,
+    /// The other listener's origin for this request; never configuration.
+    #[serde(skip)]
+    other_origin: String,
 }
 impl Default for Settings {
     fn default() -> Self {
@@ -62,6 +65,7 @@ impl Default for Settings {
             approved_accounts: vec![],
             staging: true,
             terms_agreed: false,
+            other_origin: String::new(),
         }
     }
 }
@@ -69,18 +73,7 @@ impl Settings {
     pub fn normalize(&mut self) -> anyhow::Result<()> {
         self.base_url = self.base_url.trim().trim_end_matches('/').to_string();
         if self.mode != Mode::Disabled || !self.base_url.is_empty() {
-            let url = url::Url::parse(&self.base_url)?;
-            anyhow::ensure!(
-                matches!(url.scheme(), "http" | "https")
-                    && url.host_str().is_some()
-                    && url.username().is_empty()
-                    && url.password().is_none()
-                    && url.query().is_none()
-                    && url.fragment().is_none()
-                    && url.path() == "/",
-                "ACME URL must be an HTTP(S) origin without a path, credentials or query"
-            );
-            self.base_url = url.as_str().trim_end_matches('/').to_string();
+            self.base_url = origin(&self.base_url)?;
         }
         if self.mode != Mode::Disabled {
             anyhow::ensure!(
@@ -113,12 +106,56 @@ impl Settings {
     fn url(&self, suffix: &str) -> String {
         format!("{}/acme/{suffix}", self.base_url)
     }
+    /// Advertise URLs on the origin the client connected to, so a client configured for
+    /// HTTP stays on HTTP until it is deliberately moved. `None` means ACME is closed here.
+    fn for_listener(mut self, listener: ListenerKind, tls: Option<&config::Tls>) -> Option<Self> {
+        let Some(tls) = tls else {
+            return Some(self);
+        };
+        if listener == ListenerKind::Tls {
+            self.other_origin = tls.plain_http_origin.clone();
+        } else {
+            if tls.plain_http_origin.is_empty() {
+                return None;
+            }
+            self.other_origin =
+                std::mem::replace(&mut self.base_url, tls.plain_http_origin.clone());
+        }
+        Some(self)
+    }
+    /// Account URLs are stable identifiers, so one remembered on either origin stays valid.
+    /// The signed request URL is still bound to this listener's origin.
+    fn account_id<'a>(&self, url: &'a str) -> Option<&'a str> {
+        [&self.base_url, &self.other_origin]
+            .into_iter()
+            .filter(|origin| !origin.is_empty())
+            .find_map(|origin| {
+                url.strip_prefix(origin.as_str())?
+                    .strip_prefix("/acme/account/")
+            })
+    }
     fn accepts_ip(&self, ip: std::net::IpAddr) -> bool {
         self.allowed_networks.iter().any(|n| {
             n.parse::<ipnet::IpNet>()
                 .is_ok_and(|n| n.contains(&ip.to_canonical()))
         })
     }
+}
+
+/// Canonicalize an HTTP(S) origin: scheme and host only, plus any non-default port.
+pub(crate) fn origin(input: &str) -> anyhow::Result<String> {
+    let url = url::Url::parse(input)?;
+    anyhow::ensure!(
+        matches!(url.scheme(), "http" | "https")
+            && url.host_str().is_some()
+            && url.username().is_empty()
+            && url.password().is_none()
+            && url.query().is_none()
+            && url.fragment().is_none()
+            && url.path() == "/",
+        "ACME URL must be an HTTP(S) origin without a path, credentials or query"
+    );
+    Ok(url.as_str().trim_end_matches('/').to_string())
 }
 
 pub fn router() -> Router<App> {
@@ -179,6 +216,13 @@ pub async fn put_settings(
     })?;
     let _guard = app.mutation.lock().await;
     let mut next = app.config.lock().await.value.clone();
+    if let Some(tls) = &next.server.tls
+        && !tls.accepts_base_url(&settings.base_url)
+    {
+        return Err(api::bad(
+            "with HTTPS enabled, the public URL must be the https:// origin of the server certificate's domain",
+        ));
+    }
     next.acme = settings;
     config::apply(&app, next, "acme.settings_changed", "acme").await?;
     Ok(Json(json!({"status":"saved"})))

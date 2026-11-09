@@ -6,6 +6,7 @@ pub mod config;
 mod dns;
 pub mod provider;
 pub mod security;
+pub mod server_tls;
 pub mod store;
 
 use sqlx::SqlitePool;
@@ -26,6 +27,7 @@ pub struct App {
     pub wake: Arc<Notify>,
     pub config: Arc<Mutex<config::ConfigFile>>,
     pub healthy: Arc<std::sync::atomic::AtomicBool>,
+    pub server_cert: Arc<server_tls::ServerCert>,
 }
 
 pub fn now() -> i64 {

@@ -159,7 +159,7 @@ to the same hostname/challenge path on ports 80/443.
   It is cleared on normal completion and stale job directories are removed at startup.
 - The admin UI uses a bearer token held only in page memory, never browser storage.
   All APIs require credentials; no ambient cookie authentication or permissive CORS.
-  The default listener is loopback. Use HTTPS at a reverse proxy for remote clients.
+  The default listener is loopback. Use native HTTPS or a reverse proxy for remote clients.
 
 ## Delivery milestones
 

@@ -80,3 +80,21 @@ test("request, monitor, download, and pause a managed certificate", async ({ pag
   ]);
   expect(errors).toEqual([]);
 });
+
+test("protects this server's own HTTPS certificate", async ({ page }) => {
+  const id = "server-certificate-fixture";
+  await page.route("**/api/admin/certificates**", route => route.fulfill({ json: [{
+    id, domains: ["certs.example.com"], server: true, staging: false, state: "issued", phase: "Issued", auto_renew: true,
+    downloadable: true, expires_at: Math.floor(Date.now() / 1000) + 86400 * 60, renew_at: Math.floor(Date.now() / 1000) + 86400 * 30,
+  }] }));
+  await page.goto("/certificates");
+  await page.getByLabel("Admin token", { exact: true }).fill("browser-test-admin-token-not-for-deployment");
+  await page.getByRole("button", { name: "Open administration" }).click();
+  const row = page.getByRole("table", { name: "Managed certificates" }).getByRole("row", { name: /certs\.example\.com/ }).filter({ visible: true });
+  await expect(row.getByText("This server's HTTPS certificate")).toBeVisible();
+  await row.getByRole("link", { name: "certs.example.com" }).click();
+  await expect(page.getByText("installs each renewal automatically")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Download files" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Pause renewal" })).toHaveCount(0);
+  await expect(page.getByText("Remove certificate")).toHaveCount(0);
+});

@@ -1,10 +1,10 @@
 use crate::{App, config, now, security};
 use axum::{
-    Json, Router,
+    Extension, Json, Router,
     extract::{DefaultBodyLimit, Path, Query, Request, State},
-    http::{HeaderMap, StatusCode, header},
+    http::{HeaderMap, Method, StatusCode, header},
     middleware::{self, Next},
-    response::{Html, IntoResponse, Response},
+    response::{Html, IntoResponse, Redirect, Response},
     routing::{delete, get, post, put},
 };
 use base64::{
@@ -50,7 +50,18 @@ fn unauthorized() -> Error {
     Error(StatusCode::UNAUTHORIZED, "invalid or revoked credentials")
 }
 
+/// Which socket a request arrived on. Set by the server, never derived from request data.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ListenerKind {
+    Plain,
+    Tls,
+}
+
 pub fn router(app: App) -> Router {
+    listener_router(app, ListenerKind::Plain)
+}
+
+pub fn listener_router(app: App, listener: ListenerKind) -> Router {
     let admin = Router::new()
         .route("/overview", get(overview))
         .route(
@@ -154,9 +165,48 @@ pub fn router(app: App) -> Router {
         .layer(tower::limit::ConcurrencyLimitLayer::new(64))
         .layer(middleware::from_fn_with_state(
             app.clone(),
+            plain_http_policy,
+        ))
+        .layer(middleware::from_fn_with_state(
+            app.clone(),
             security_headers,
         ))
+        .layer(Extension(listener))
         .with_state(app)
+}
+
+/// Once `acme_only` is set, nothing carrying a bearer token is served over plain HTTP.
+async fn plain_http_policy(State(app): State<App>, request: Request, next: Next) -> Response {
+    let tls = {
+        let config = app.config.lock().await;
+        let base_url = config.value.acme.base_url.clone();
+        config.value.server.tls.clone().map(|tls| (tls, base_url))
+    };
+    let (Some(ListenerKind::Plain), Some((tls, base_url))) =
+        (request.extensions().get::<ListenerKind>(), tls)
+    else {
+        return next.run(request).await;
+    };
+    let path = request.uri().path();
+    if tls.plain_http != config::PlainHttp::AcmeOnly
+        || path == "/healthz"
+        || path.starts_with("/acme/")
+    {
+        return next.run(request).await;
+    }
+    if matches!(*request.method(), Method::GET | Method::HEAD) && !path.starts_with("/api/") {
+        let origin = if base_url.is_empty() {
+            format!("https://{}", tls.domain)
+        } else {
+            base_url
+        };
+        let target = request
+            .uri()
+            .path_and_query()
+            .map_or(path, |value| value.as_str());
+        return Redirect::permanent(&format!("{origin}{target}")).into_response();
+    }
+    Error(StatusCode::FORBIDDEN, "use HTTPS for this endpoint").into_response()
 }
 
 async fn admin_page() -> Html<&'static str> {
@@ -386,7 +436,7 @@ async fn save_provider(app: App, id: Option<String>, input: ProviderInput) -> Re
     } else {
         next.providers.push(provider);
     }
-    config::apply(&app, next, "provider.saved", &id).await.map_err(|_| conflict("could not save provider: check fields and unique zone; restart after file edits; clean up challenges before changing the zone or driver"))?;
+    config::apply(&app, next, "provider.saved", &id).await.map_err(|_| conflict("could not save provider: check fields and unique zone; restart after file edits; clean up challenges before changing the zone or driver; keep the server certificate's domain covered"))?;
     Ok(Json(json!({"id":id})))
 }
 async fn remove_provider(State(app): State<App>, Path(id): Path<String>) -> Result<Json<Value>> {
@@ -395,7 +445,11 @@ async fn remove_provider(State(app): State<App>, Path(id): Path<String>) -> Resu
     next.providers.retain(|p| p.id != id);
     config::apply(&app, next, "provider.removed", &id)
         .await
-        .map_err(|_| conflict("clean up outstanding challenges before removing this provider"))?;
+        .map_err(|_| {
+            conflict(
+                "clean up outstanding challenges before removing this provider; the server certificate's domain must stay covered",
+            )
+        })?;
     Ok(Json(json!({"status":"removed"})))
 }
 

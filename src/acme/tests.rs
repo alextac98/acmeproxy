@@ -1,7 +1,9 @@
 use super::*;
 use crate::{
-    api,
+    api::{self, ListenerKind},
     certificates::tests::{Ca, CaState, Fixture},
+    config::PlainHttp,
+    server_tls::tests::{HTTP, HTTPS, enable},
 };
 use axum::{
     body::{Body, Bytes},
@@ -547,7 +549,17 @@ impl Signer {
         Self { key, jwk }
     }
     fn jws(&self, path: &str, nonce: Option<&str>, kid: Option<&str>, payload: Value) -> Value {
-        let mut header = json!({"alg":"ES256","url":format!("https://downstream.test{path}")});
+        self.jws_at("https://downstream.test", path, nonce, kid, payload)
+    }
+    fn jws_at(
+        &self,
+        origin: &str,
+        path: &str,
+        nonce: Option<&str>,
+        kid: Option<&str>,
+        payload: Value,
+    ) -> Value {
+        let mut header = json!({"alg":"ES256","url":format!("{origin}{path}")});
         if let Some(nonce) = nonce {
             header["nonce"] = json!(nonce);
         }
@@ -579,6 +591,16 @@ async fn call(
     body: Value,
     peer: &str,
 ) -> (StatusCode, axum::http::HeaderMap, Value) {
+    call_on(app, ListenerKind::Plain, method, path, body, peer).await
+}
+async fn call_on(
+    app: &App,
+    listener: ListenerKind,
+    method: &str,
+    path: &str,
+    body: Value,
+    peer: &str,
+) -> (StatusCode, axum::http::HeaderMap, Value) {
     let request = Request::builder()
         .method(method)
         .uri(path)
@@ -591,7 +613,10 @@ async fn call(
             body.to_string()
         }))
         .unwrap();
-    let response = api::router(app.clone()).oneshot(request).await.unwrap();
+    let response = api::listener_router(app.clone(), listener)
+        .oneshot(request)
+        .await
+        .unwrap();
     let status = response.status();
     let headers = response.headers().clone();
     let bytes = response.into_body().collect().await.unwrap().to_bytes();
@@ -1527,4 +1552,180 @@ async fn real_certbot_issues_and_renews_through_http01_without_dns_plugins() {
     println!(
         "Certbot CLI: HTTP-01 issuance and forced renewal passed; DNS-only and wildcard requests rejected; private keys stayed client-side."
     );
+}
+
+async fn directory_on(app: &App, listener: ListenerKind) -> (StatusCode, Value) {
+    let (status, _, value) = call_on(
+        app,
+        listener,
+        "GET",
+        "/acme/directory",
+        Value::Null,
+        "127.0.0.1:1234",
+    )
+    .await;
+    (status, value)
+}
+async fn nonce_on(app: &App, listener: ListenerKind) -> String {
+    call_on(
+        app,
+        listener,
+        "HEAD",
+        "/acme/new-nonce",
+        Value::Null,
+        "127.0.0.1:1234",
+    )
+    .await
+    .1["replay-nonce"]
+        .to_str()
+        .unwrap()
+        .into()
+}
+async fn register_on(app: &App, key: &Signer, listener: ListenerKind, origin: &str) -> String {
+    let body = key.jws_at(
+        origin,
+        "/acme/new-account",
+        Some(&nonce_on(app, listener).await),
+        None,
+        json!({"termsOfServiceAgreed":true}),
+    );
+    let (status, headers, value) = call_on(
+        app,
+        listener,
+        "POST",
+        "/acme/new-account",
+        body,
+        "127.0.0.1:1234",
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED, "{value}");
+    headers["location"].to_str().unwrap().into()
+}
+
+#[tokio::test]
+async fn each_listener_advertises_its_own_origin() {
+    let fixture = Fixture::new().await;
+    let app = &fixture.app;
+    enable(app, PlainHttp::Full, HTTP).await;
+    let (status, plain) = directory_on(app, ListenerKind::Plain).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(plain["newOrder"], format!("{HTTP}/acme/new-order"));
+    let (status, secure) = directory_on(app, ListenerKind::Tls).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(secure["newOrder"], format!("{HTTPS}/acme/new-order"));
+    assert_eq!(app.config.lock().await.value.acme.base_url, HTTPS);
+}
+
+#[tokio::test]
+async fn a_plain_http_account_keeps_working_and_can_move_to_https() {
+    let fixture = Fixture::new().await;
+    let app = &fixture.app;
+    enable(app, PlainHttp::Full, HTTP).await;
+    let key = Signer::new();
+    let kid = register_on(app, &key, ListenerKind::Plain, HTTP).await;
+    assert!(kid.starts_with(&format!("{HTTP}/acme/account/")), "{kid}");
+    let path = kid.strip_prefix(HTTP).unwrap().to_owned();
+
+    for (listener, origin) in [(ListenerKind::Plain, HTTP), (ListenerKind::Tls, HTTPS)] {
+        let body = key.jws_at(
+            origin,
+            &path,
+            Some(&nonce_on(app, listener).await),
+            Some(&kid),
+            json!({}),
+        );
+        let (status, headers, value) =
+            call_on(app, listener, "POST", &path, body, "127.0.0.1:1234").await;
+        assert_eq!(status, StatusCode::OK, "{value}");
+        assert_eq!(headers["location"], format!("{origin}{path}"));
+    }
+}
+
+#[tokio::test]
+async fn signed_urls_are_bound_to_the_listener_that_received_them() {
+    let fixture = Fixture::new().await;
+    let app = &fixture.app;
+    enable(app, PlainHttp::Full, HTTP).await;
+    let key = Signer::new();
+    for (listener, wrong_origin) in [(ListenerKind::Plain, HTTPS), (ListenerKind::Tls, HTTP)] {
+        let body = key.jws_at(
+            wrong_origin,
+            "/acme/new-account",
+            Some(&nonce_on(app, listener).await),
+            None,
+            json!({"termsOfServiceAgreed":true}),
+        );
+        let (status, _, value) = call_on(
+            app,
+            listener,
+            "POST",
+            "/acme/new-account",
+            body,
+            "127.0.0.1:1234",
+        )
+        .await;
+        assert_eq!(status, StatusCode::BAD_REQUEST, "{value}");
+        assert!(value["detail"].as_str().unwrap().contains("JWS URL"));
+    }
+}
+
+#[tokio::test]
+async fn key_rollover_accepts_an_account_url_from_either_origin() {
+    let fixture = Fixture::new().await;
+    let app = &fixture.app;
+    enable(app, PlainHttp::Full, HTTP).await;
+    let key = Signer::new();
+    let kid = register_on(app, &key, ListenerKind::Plain, HTTP).await;
+    let replacement = Signer::new();
+    let inner = replacement.jws_at(
+        HTTPS,
+        "/acme/key-change",
+        None,
+        None,
+        json!({"account":kid,"oldKey":key.jwk}),
+    );
+    let body = key.jws_at(
+        HTTPS,
+        "/acme/key-change",
+        Some(&nonce_on(app, ListenerKind::Tls).await),
+        Some(&kid),
+        inner,
+    );
+    let (status, _, value) = call_on(
+        app,
+        ListenerKind::Tls,
+        "POST",
+        "/acme/key-change",
+        body,
+        "127.0.0.1:1234",
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{value}");
+}
+
+#[tokio::test]
+async fn plain_http_acme_closes_when_no_origin_is_configured() {
+    let fixture = Fixture::new().await;
+    let app = &fixture.app;
+    enable(app, PlainHttp::Full, "").await;
+    let (status, value) = directory_on(app, ListenerKind::Plain).await;
+    assert_eq!(status, StatusCode::FORBIDDEN, "{value}");
+    assert!(value["detail"].as_str().unwrap().contains("HTTPS"));
+    assert_eq!(directory_on(app, ListenerKind::Tls).await.0, StatusCode::OK);
+}
+
+#[tokio::test]
+async fn the_ui_cannot_point_the_acme_url_away_from_the_server_certificate() {
+    let fixture = Fixture::new().await;
+    let app = &fixture.app;
+    enable(app, PlainHttp::Full, HTTP).await;
+    let settings = Settings {
+        mode: Mode::Http01,
+        base_url: HTTP.into(),
+        terms_agreed: true,
+        ..Default::default()
+    };
+    let result = put_settings(State(app.clone()), Json(settings)).await;
+    assert_eq!(result.err().unwrap().0, StatusCode::BAD_REQUEST);
+    assert_eq!(app.config.lock().await.value.acme.base_url, HTTPS);
 }
